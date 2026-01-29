@@ -1,0 +1,17 @@
+{
+  "name": "nansen-cli",
+  "version": "1.0.0",
+  "description": "Command-line interface for Nansen API - designed for AI agents",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "nansen": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test src/**/*.test.js"
+  },
+  "keywords": ["nansen", "crypto", "blockchain", "api", "cli", "ai-agent"],
+  "author": "Nansen",
+  "license": "MIT"
+}
