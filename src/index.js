@@ -23,7 +23,7 @@ function parseArgs(args) {
       const key = arg.slice(2);
       const next = args[i + 1];
       
-      if (key === 'pretty' || key === 'help') {
+      if (key === 'pretty' || key === 'help' || key === 'table') {
         result.flags[key] = true;
       } else if (next && !next.startsWith('-')) {
         // Try to parse as JSON first
@@ -46,9 +46,98 @@ function parseArgs(args) {
   return result;
 }
 
+// Table formatter for human-readable output
+function formatTable(data) {
+  // Extract array of records from various response shapes
+  let records = [];
+  if (Array.isArray(data)) {
+    records = data;
+  } else if (data?.data && Array.isArray(data.data)) {
+    records = data.data;
+  } else if (data?.results && Array.isArray(data.results)) {
+    records = data.results;
+  } else if (data?.data?.results && Array.isArray(data.data.results)) {
+    records = data.data.results;
+  } else if (typeof data === 'object' && data !== null) {
+    // Single object - convert to array
+    records = [data];
+  }
+
+  if (records.length === 0) {
+    return 'No data';
+  }
+
+  // Get columns from first record, prioritize common useful fields
+  const priorityFields = ['token_symbol', 'token_name', 'symbol', 'name', 'address', 'label', 'chain', 'value_usd', 'amount', 'pnl_usd', 'price_usd', 'volume_usd', 'net_flow_usd', 'timestamp', 'block_timestamp'];
+  const allKeys = [...new Set(records.flatMap(r => Object.keys(r)))];
+  
+  // Sort: priority fields first, then alphabetically
+  const columns = allKeys.sort((a, b) => {
+    const aIdx = priorityFields.indexOf(a);
+    const bIdx = priorityFields.indexOf(b);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return a.localeCompare(b);
+  }).slice(0, 8); // Limit to 8 columns for readability
+
+  // Calculate column widths
+  const widths = columns.map(col => {
+    const headerLen = col.length;
+    const maxDataLen = Math.max(...records.map(r => {
+      const val = formatValue(r[col]);
+      return val.length;
+    }));
+    return Math.min(Math.max(headerLen, maxDataLen), 30); // Cap at 30 chars
+  });
+
+  // Build table
+  const separator = '─';
+  const lines = [];
+  
+  // Header
+  const header = columns.map((col, i) => col.padEnd(widths[i])).join(' │ ');
+  lines.push(header);
+  lines.push(widths.map(w => separator.repeat(w)).join('─┼─'));
+  
+  // Rows
+  for (const record of records.slice(0, 50)) { // Limit to 50 rows
+    const row = columns.map((col, i) => {
+      const val = formatValue(record[col]);
+      return val.slice(0, widths[i]).padEnd(widths[i]);
+    }).join(' │ ');
+    lines.push(row);
+  }
+
+  if (records.length > 50) {
+    lines.push(`... and ${records.length - 50} more rows`);
+  }
+
+  return lines.join('\n');
+}
+
+function formatValue(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'number') {
+    if (Math.abs(val) >= 1000000) return (val / 1000000).toFixed(2) + 'M';
+    if (Math.abs(val) >= 1000) return (val / 1000).toFixed(2) + 'K';
+    if (Number.isInteger(val)) return val.toString();
+    return val.toFixed(2);
+  }
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
 // Output helper
-function output(data, pretty = false) {
-  if (pretty) {
+function output(data, pretty = false, table = false) {
+  if (table) {
+    if (data.success === false) {
+      console.error(`Error: ${data.error}`);
+    } else {
+      const tableData = data.data || data;
+      console.log(formatTable(tableData));
+    }
+  } else if (pretty) {
     console.log(JSON.stringify(data, null, 2));
   } else {
     console.log(JSON.stringify(data));
@@ -56,14 +145,14 @@ function output(data, pretty = false) {
 }
 
 // Error output
-function errorOutput(error, pretty = false) {
+function errorOutput(error, pretty = false, table = false) {
   const errorData = {
     success: false,
     error: error.message,
     status: error.status,
     details: error.data
   };
-  output(errorData, pretty);
+  output(errorData, pretty, table);
   process.exit(1);
 }
 
@@ -86,6 +175,7 @@ COMMANDS:
 
 GLOBAL OPTIONS:
   --pretty       Format JSON output for readability
+  --table        Format output as human-readable table
   --chain        Blockchain to query (ethereum, solana, base, etc.)
   --chains       Multiple chains as JSON array
   --limit        Number of results (shorthand for pagination)
@@ -370,6 +460,7 @@ async function main() {
   const command = positional[0] || 'help';
   const subArgs = positional.slice(1);
   const pretty = flags.pretty || flags.p;
+  const table = flags.table || flags.t;
 
   if (command === 'help' || flags.help || flags.h) {
     console.log(HELP);
@@ -380,7 +471,7 @@ async function main() {
     output({ 
       error: `Unknown command: ${command}`,
       available: Object.keys(commands)
-    }, pretty);
+    }, pretty, table);
     process.exit(1);
   }
 
@@ -395,9 +486,9 @@ async function main() {
   try {
     const api = new NansenAPI();
     const result = await commands[command](subArgs, api, flags, options);
-    output({ success: true, data: result }, pretty);
+    output({ success: true, data: result }, pretty, table);
   } catch (error) {
-    errorOutput(error, pretty);
+    errorOutput(error, pretty, table);
   }
 }
 
