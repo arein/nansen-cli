@@ -2,14 +2,6 @@
 
 > **Built by agents, for agents.** We prioritize improvements that create the best possible AI agent experience.
 
-## P0 - High Impact
-
-### Response Caching  
-- [ ] Add optional local cache (SQLite or file-based)
-- [ ] Configurable TTL (default 60-300s)
-- [ ] `--no-cache` flag to bypass
-- [ ] `--cache-ttl` flag to override
-
 ## P1 - Should Have
 
 ### Test Cleanup

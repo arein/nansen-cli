@@ -20,6 +20,9 @@ import {
   filterFields,
   parseFields
 } from '../cli.js';
+import { getCachedResponse, setCachedResponse, clearCache, getCacheDir } from '../api.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('parseArgs', () => {
   it('should parse positional arguments', () => {
@@ -1308,5 +1311,200 @@ describe('--fields flag integration', () => {
     await runCLI(['smart-money', 'netflow', '--fields', 'symbol', '--pretty'], deps);
     
     expect(outputs[0]).toContain('\n'); // Pretty formatting
+  });
+});
+
+// =================== Response Caching ===================
+
+describe('Response Caching', () => {
+  const testEndpoint = '/test/endpoint';
+  const testBody = { test: true };
+  const testData = { result: 'cached data' };
+
+  beforeEach(() => {
+    // Clear cache before each test
+    clearCache();
+  });
+
+  afterEach(() => {
+    // Clean up after tests
+    clearCache();
+  });
+
+  describe('getCachedResponse', () => {
+    it('should return null for uncached endpoint', () => {
+      const result = getCachedResponse('/uncached/endpoint', {});
+      expect(result).toBeNull();
+    });
+
+    it('should return cached data when valid', () => {
+      setCachedResponse(testEndpoint, testBody, testData);
+      const result = getCachedResponse(testEndpoint, testBody, 300);
+      
+      expect(result.result).toBe('cached data');
+      expect(result._meta.fromCache).toBe(true);
+      expect(result._meta.cacheAge).toBeDefined();
+    });
+
+    it('should return null for expired cache', async () => {
+      setCachedResponse(testEndpoint, testBody, testData);
+      
+      // Use very short TTL to simulate expiry
+      const result = getCachedResponse(testEndpoint, testBody, 0);
+      expect(result).toBeNull();
+    });
+
+    it('should use different keys for different bodies', () => {
+      setCachedResponse(testEndpoint, { a: 1 }, { data: 'first' });
+      setCachedResponse(testEndpoint, { a: 2 }, { data: 'second' });
+      
+      const result1 = getCachedResponse(testEndpoint, { a: 1 }, 300);
+      const result2 = getCachedResponse(testEndpoint, { a: 2 }, 300);
+      
+      expect(result1.data).toBe('first');
+      expect(result2.data).toBe('second');
+    });
+  });
+
+  describe('setCachedResponse', () => {
+    it('should create cache directory if not exists', () => {
+      const cacheDir = getCacheDir();
+      // Clear the directory first
+      if (fs.existsSync(cacheDir)) {
+        fs.rmSync(cacheDir, { recursive: true });
+      }
+      
+      setCachedResponse(testEndpoint, testBody, testData);
+      
+      expect(fs.existsSync(cacheDir)).toBe(true);
+    });
+
+    it('should write cache file', () => {
+      setCachedResponse(testEndpoint, testBody, testData);
+      
+      const cacheDir = getCacheDir();
+      const files = fs.readdirSync(cacheDir).filter(f => f.endsWith('.json'));
+      expect(files.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('clearCache', () => {
+    it('should remove all cached responses', () => {
+      setCachedResponse('/endpoint/1', {}, { data: 1 });
+      setCachedResponse('/endpoint/2', {}, { data: 2 });
+      setCachedResponse('/endpoint/3', {}, { data: 3 });
+      
+      const count = clearCache();
+      
+      expect(count).toBe(3);
+      expect(getCachedResponse('/endpoint/1', {}, 300)).toBeNull();
+    });
+
+    it('should return 0 for empty cache', () => {
+      const count = clearCache();
+      expect(count).toBe(0);
+    });
+  });
+});
+
+describe('cache command', () => {
+  it('should be in NO_AUTH_COMMANDS', () => {
+    expect(NO_AUTH_COMMANDS).toContain('cache');
+  });
+
+  it('should clear cache with clear subcommand', async () => {
+    const logs = [];
+    const mockDeps = {
+      log: (msg) => logs.push(msg),
+      exit: vi.fn()
+    };
+    const commands = buildCommands(mockDeps);
+    
+    // Add some cache entries first
+    setCachedResponse('/test/1', {}, { data: 1 });
+    setCachedResponse('/test/2', {}, { data: 2 });
+    
+    await commands.cache(['clear'], null, {}, {});
+    
+    expect(logs.some(l => l.includes('Cleared 2'))).toBe(true);
+  });
+
+  it('should show help for unknown subcommand', async () => {
+    const logs = [];
+    const mockDeps = {
+      log: (msg) => logs.push(msg),
+      exit: vi.fn()
+    };
+    const commands = buildCommands(mockDeps);
+    
+    await commands.cache(['unknown'], null, {}, {});
+    
+    expect(logs.some(l => l.includes('Unknown cache subcommand'))).toBe(true);
+  });
+});
+
+describe('--cache flag integration', () => {
+  let outputs;
+  let exitCode;
+
+  const mockDeps = () => ({
+    output: (msg) => outputs.push(msg),
+    errorOutput: (msg) => outputs.push(msg),
+    exit: (code) => { exitCode = code; }
+  });
+
+  beforeEach(() => {
+    outputs = [];
+    exitCode = null;
+    clearCache();
+  });
+
+  afterEach(() => {
+    clearCache();
+  });
+
+  it('should pass cache options to API when --cache flag used', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--cache'], deps);
+    
+    expect(capturedOptions.cache.enabled).toBe(true);
+  });
+
+  it('should use custom TTL when --cache-ttl specified', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--cache', '--cache-ttl', '60'], deps);
+    
+    expect(capturedOptions.cache.ttl).toBe(60);
+  });
+
+  it('should not enable cache by default', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow'], deps);
+    
+    expect(capturedOptions.cache.enabled).toBeFalsy();
   });
 });

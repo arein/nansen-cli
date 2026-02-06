@@ -3,7 +3,7 @@
  * Extracted from index.js for coverage
  */
 
-import { NansenAPI, saveConfig, deleteConfig, getConfigFile } from './api.js';
+import { NansenAPI, saveConfig, deleteConfig, getConfigFile, clearCache, getCacheDir } from './api.js';
 import * as readline from 'readline';
 
 // ============= Schema Definition =============
@@ -278,7 +278,7 @@ export function parseArgs(args) {
       const key = arg.slice(2);
       const next = args[i + 1];
       
-      if (key === 'pretty' || key === 'help' || key === 'table' || key === 'no-retry') {
+      if (key === 'pretty' || key === 'help' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache') {
         result.flags[key] = true;
       } else if (next && !next.startsWith('-')) {
         // Try to parse as JSON first
@@ -439,6 +439,7 @@ COMMANDS:
   login          Save your API key (interactive)
   logout         Remove saved API key
   schema         Output JSON schema for all commands (for agent introspection)
+  cache          Cache management (clear)
   smart-money    Smart Money analytics (netflow, dex-trades, holdings, dcas, historical-holdings)
   profiler       Wallet profiling (balance, labels, transactions, pnl, perp-positions, perp-trades)
   token          Token God Mode (screener, holders, flows, trades, pnl, perp-trades, perp-positions)
@@ -459,6 +460,9 @@ GLOBAL OPTIONS:
   --symbol       Token symbol (for perp endpoints)
   --no-retry     Disable automatic retry on rate limits/errors
   --retries <n>  Max retry attempts (default: 3)
+  --cache        Enable response caching (default: off)
+  --no-cache     Disable cache for this request
+  --cache-ttl <s> Cache TTL in seconds (default: 300)
 
 EXAMPLES:
   # Get Smart Money netflow on Solana
@@ -620,6 +624,35 @@ export function buildCommands(deps = {}) {
       return SCHEMA;
     },
 
+    'cache': async (args, apiInstance, flags, options) => {
+      const subcommand = args[0] || 'help';
+      
+      const handlers = {
+        'clear': () => {
+          const count = clearCache();
+          log(`✓ Cleared ${count} cached responses`);
+          log(`  Cache dir: ${getCacheDir()}`);
+        },
+        'help': () => {
+          log('Cache Management\n');
+          log('USAGE:');
+          log('  nansen cache clear    Clear all cached responses\n');
+          log('CACHE OPTIONS (for any command):');
+          log('  --cache               Enable caching for this session');
+          log('  --no-cache            Bypass cache for this request');
+          log('  --cache-ttl <seconds> Set cache TTL (default: 300)');
+        }
+      };
+      
+      if (!handlers[subcommand]) {
+        log(`Unknown cache subcommand: ${subcommand}`);
+        handlers['help']();
+        return;
+      }
+      
+      return handlers[subcommand]();
+    },
+
     'smart-money': async (args, apiInstance, flags, options) => {
       const subcommand = args[0] || 'help';
       const chain = options.chain || 'solana';
@@ -763,7 +796,7 @@ export function buildCommands(deps = {}) {
 }
 
 // Commands that don't require API authentication
-export const NO_AUTH_COMMANDS = ['login', 'logout', 'help', 'schema'];
+export const NO_AUTH_COMMANDS = ['login', 'logout', 'help', 'schema', 'cache'];
 
 // Run CLI with given args (returns result, allows custom output/exit handlers)
 export async function runCLI(rawArgs, deps = {}) {
@@ -820,7 +853,13 @@ export async function runCLI(rawArgs, deps = {}) {
       ? { maxRetries: 0 } 
       : { maxRetries: options.retries !== undefined ? options.retries : 3 };
     
-    const api = new NansenAPIClass(undefined, undefined, { retry: retryOptions });
+    // Configure cache options
+    const cacheOptions = {
+      enabled: flags['cache'] && !flags['no-cache'],
+      ttl: options['cache-ttl'] !== undefined ? options['cache-ttl'] : 300
+    };
+    
+    const api = new NansenAPIClass(undefined, undefined, { retry: retryOptions, cache: cacheOptions });
     let result = await commands[command](subArgs, api, flags, options);
     
     // Apply field filtering if --fields is specified

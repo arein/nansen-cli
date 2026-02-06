@@ -145,6 +145,93 @@ export function deleteConfig() {
   return false;
 }
 
+// ============= Response Cache =============
+
+const CACHE_DIR = path.join(CONFIG_DIR, 'cache');
+const DEFAULT_CACHE_TTL = 300; // 5 minutes
+
+import crypto from 'crypto';
+
+/**
+ * Generate cache key from endpoint and request body
+ */
+function getCacheKey(endpoint, body) {
+  const data = JSON.stringify({ endpoint, body });
+  return crypto.createHash('md5').update(data).digest('hex');
+}
+
+/**
+ * Get cached response if valid
+ */
+export function getCachedResponse(endpoint, body, ttlSeconds = DEFAULT_CACHE_TTL) {
+  const cacheKey = getCacheKey(endpoint, body);
+  const cacheFile = path.join(CACHE_DIR, `${cacheKey}.json`);
+  
+  if (!fs.existsSync(cacheFile)) {
+    return null;
+  }
+  
+  try {
+    const cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    const age = (Date.now() - cached.timestamp) / 1000;
+    
+    if (ttlSeconds <= 0 || age > ttlSeconds) {
+      // Cache expired or TTL is 0, delete it
+      fs.unlinkSync(cacheFile);
+      return null;
+    }
+    
+    return { ...cached.data, _meta: { ...cached.data._meta, fromCache: true, cacheAge: Math.round(age) } };
+  } catch (e) {
+    // Invalid cache file, delete it
+    try { fs.unlinkSync(cacheFile); } catch {}
+    return null;
+  }
+}
+
+/**
+ * Save response to cache
+ */
+export function setCachedResponse(endpoint, body, data) {
+  if (!fs.existsSync(CACHE_DIR)) {
+    fs.mkdirSync(CACHE_DIR, { mode: 0o700, recursive: true });
+  }
+  
+  const cacheKey = getCacheKey(endpoint, body);
+  const cacheFile = path.join(CACHE_DIR, `${cacheKey}.json`);
+  
+  const cached = {
+    timestamp: Date.now(),
+    endpoint,
+    data
+  };
+  
+  fs.writeFileSync(cacheFile, JSON.stringify(cached), { mode: 0o600 });
+}
+
+/**
+ * Clear all cached responses
+ */
+export function clearCache() {
+  if (fs.existsSync(CACHE_DIR)) {
+    const files = fs.readdirSync(CACHE_DIR);
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        fs.unlinkSync(path.join(CACHE_DIR, file));
+      }
+    }
+    return files.length;
+  }
+  return 0;
+}
+
+/**
+ * Get cache directory path
+ */
+export function getCacheDir() {
+  return CACHE_DIR;
+}
+
 // ============= Address Validation =============
 
 const ADDRESS_PATTERNS = {
@@ -299,12 +386,27 @@ export class NansenAPI {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
     this.retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...options.retry };
+    this.cacheOptions = { 
+      enabled: options.cache?.enabled ?? false,
+      ttl: options.cache?.ttl ?? DEFAULT_CACHE_TTL
+    };
   }
 
   async request(endpoint, body = {}, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const { maxRetries, baseDelayMs, maxDelayMs, retryOnStatus } = this.retryOptions;
     const shouldRetry = options.retry !== false; // Allow disabling retry per-request
+    
+    // Check cache first (if enabled and not bypassed)
+    const useCache = options.cache !== false && this.cacheOptions.enabled;
+    const cacheTtl = options.cacheTtl ?? this.cacheOptions.ttl;
+    
+    if (useCache) {
+      const cached = getCachedResponse(endpoint, body, cacheTtl);
+      if (cached) {
+        return cached;
+      }
+    }
     
     let lastError;
     
@@ -383,6 +485,12 @@ export class NansenAPI {
       if (attempt > 0) {
         data._meta = { ...(data._meta || {}), retriedAttempts: attempt };
       }
+      
+      // Cache successful response
+      if (useCache) {
+        setCachedResponse(endpoint, body, data);
+      }
+      
       return data;
     }
     

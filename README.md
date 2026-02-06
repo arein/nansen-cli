@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/nansen-cli.svg)](https://www.npmjs.com/package/nansen-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-342%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-356%20passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen.svg)]()
 
 > **Built by agents, for agents.** We prioritize the best possible AI agent experience.
@@ -137,6 +137,15 @@ nansen schema smart-money --pretty
 
 Returns command definitions, option types/defaults, supported chains, and smart money labels.
 
+### `cache` - Cache Management
+
+Manage the local response cache.
+
+```bash
+# Clear all cached responses
+nansen cache clear
+```
+
 ## Options
 
 | Option | Description |
@@ -144,6 +153,9 @@ Returns command definitions, option types/defaults, supported chains, and smart 
 | `--pretty` | Format JSON output for readability |
 | `--table` | Format output as human-readable table |
 | `--fields <list>` | Comma-separated fields to include (reduces response size) |
+| `--cache` | Enable response caching |
+| `--no-cache` | Bypass cache for this request |
+| `--cache-ttl <s>` | Cache TTL in seconds (default: 300) |
 | `--chain <chain>` | Blockchain to query |
 | `--chains <json>` | Multiple chains as JSON array |
 | `--limit <n>` | Number of results |
