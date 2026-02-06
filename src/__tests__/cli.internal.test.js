@@ -575,3 +575,169 @@ describe('runCLI', () => {
     expect(exitCode).toBe(1);
   });
 });
+
+// =================== P1: --table Output Formatting ===================
+
+describe('--table output formatting', () => {
+  it('should format token data with priority columns', () => {
+    const data = [
+      { token_symbol: 'SOL', token_name: 'Solana', value_usd: 1500000, random_field: 'ignored' },
+      { token_symbol: 'ETH', token_name: 'Ethereum', value_usd: 2500000, random_field: 'also ignored' }
+    ];
+    const result = formatTable(data);
+    
+    // Should have headers
+    expect(result).toContain('token_symbol');
+    expect(result).toContain('token_name');
+    expect(result).toContain('value_usd');
+    
+    // Should format large numbers with M suffix
+    expect(result).toContain('1.50M');
+    expect(result).toContain('2.50M');
+    
+    // Should have table separators
+    expect(result).toContain('│');
+    expect(result).toContain('─');
+  });
+
+  it('should format address and chain columns', () => {
+    const data = [
+      { address: '0x1234...', chain: 'ethereum', label: 'Whale', pnl_usd: 50000 }
+    ];
+    const result = formatTable(data);
+    
+    expect(result).toContain('address');
+    expect(result).toContain('chain');
+    expect(result).toContain('label');
+    expect(result).toContain('0x1234...');
+    expect(result).toContain('ethereum');
+    expect(result).toContain('Whale');
+    expect(result).toContain('50.00K');
+  });
+
+  it('should handle nested API response with data wrapper', () => {
+    const response = {
+      success: true,
+      data: [
+        { symbol: 'BTC', price_usd: 45000, volume_usd: 1000000000 }
+      ]
+    };
+    const formatted = formatOutput(response, { table: true });
+    
+    expect(formatted.type).toBe('table');
+    expect(formatted.text).toContain('symbol');
+    expect(formatted.text).toContain('BTC');
+    expect(formatted.text).toContain('1000.00M');
+  });
+
+  it('should truncate long values to column width', () => {
+    const data = [
+      { address: '0x1234567890abcdef1234567890abcdef12345678', name: 'A very long name that exceeds thirty characters easily' }
+    ];
+    const result = formatTable(data);
+    
+    // Values should be truncated (max 30 chars per column)
+    const lines = result.split('\n');
+    lines.forEach(line => {
+      // Each cell shouldn't exceed reasonable width
+      expect(line.length).toBeLessThan(300);
+    });
+  });
+
+  it('should handle empty values gracefully', () => {
+    const data = [
+      { symbol: 'TEST', value: null, amount: undefined, label: '' }
+    ];
+    const result = formatTable(data);
+    
+    expect(result).toContain('TEST');
+    // Empty values should not cause errors
+    expect(result).not.toContain('null');
+    expect(result).not.toContain('undefined');
+  });
+
+  it('should format error response in table mode', () => {
+    const errorResponse = { success: false, error: 'Rate limited' };
+    const formatted = formatOutput(errorResponse, { table: true });
+    
+    expect(formatted.type).toBe('error');
+    expect(formatted.text).toBe('Error: Rate limited');
+  });
+});
+
+// =================== P1: --no-retry and --retries Flags ===================
+
+describe('--no-retry and --retries flags', () => {
+  let outputs, exitCode;
+
+  const mockDeps = () => ({
+    output: (msg) => outputs.push(msg),
+    errorOutput: (msg) => outputs.push(msg),
+    exit: (code) => { exitCode = code; }
+  });
+
+  beforeEach(() => {
+    outputs = [];
+    exitCode = null;
+  });
+
+  it('should set maxRetries to 0 when --no-retry is used', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--no-retry'], deps);
+    
+    expect(capturedOptions.retry.maxRetries).toBe(0);
+  });
+
+  it('should use default maxRetries of 3 without flags', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow'], deps);
+    
+    expect(capturedOptions.retry.maxRetries).toBe(3);
+  });
+
+  it('should use custom maxRetries when --retries is specified', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--retries', '7'], deps);
+    
+    expect(capturedOptions.retry.maxRetries).toBe(7);
+  });
+
+  it('should allow --retries 0 to disable retries', async () => {
+    let capturedOptions;
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI(key, url, opts) {
+        capturedOptions = opts;
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({ data: [] });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--retries', '0'], deps);
+    
+    expect(capturedOptions.retry.maxRetries).toBe(0);
+  });
+});

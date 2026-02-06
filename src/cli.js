@@ -528,7 +528,7 @@ export async function runCLI(rawArgs, deps = {}) {
     // Configure retry options
     const retryOptions = flags['no-retry'] 
       ? { maxRetries: 0 } 
-      : { maxRetries: options.retries || 3 };
+      : { maxRetries: options.retries !== undefined ? options.retries : 3 };
     
     const api = new NansenAPIClass(undefined, undefined, { retry: retryOptions });
     const result = await commands[command](subArgs, api, flags, options);
