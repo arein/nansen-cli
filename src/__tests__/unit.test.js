@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { validateAddress, validateTokenAddress, saveConfig, deleteConfig, getConfigFile, getConfigDir, ErrorCode, NansenError } from '../api.js';
+import { parseArgs, parseSort, formatValue } from '../cli.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -195,38 +196,7 @@ describe('Config Management', () => {
 // =================== CLI Argument Parsing ===================
 
 describe('CLI Argument Parsing', () => {
-  // Helper to simulate parseArgs behavior
-  function parseArgs(args) {
-    const result = { _: [], flags: {}, options: {} };
-    
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i];
-      
-      if (arg.startsWith('--')) {
-        const key = arg.slice(2);
-        const next = args[i + 1];
-        
-        if (key === 'pretty' || key === 'help' || key === 'table' || key === 'smart-money') {
-          result.flags[key] = true;
-        } else if (next && !next.startsWith('-')) {
-          try {
-            result.options[key] = JSON.parse(next);
-          } catch {
-            result.options[key] = next;
-          }
-          i++;
-        } else {
-          result.flags[key] = true;
-        }
-      } else if (arg.startsWith('-')) {
-        result.flags[arg.slice(1)] = true;
-      } else {
-        result._.push(arg);
-      }
-    }
-    
-    return result;
-  }
+  // Now uses parseArgs imported from cli.js (no duplicate implementation)
 
   it('should parse positional arguments', () => {
     const result = parseArgs(['smart-money', 'netflow']);
@@ -279,17 +249,7 @@ describe('CLI Argument Parsing', () => {
 // =================== Sort Parsing ===================
 
 describe('Sort Parsing', () => {
-  // Helper to simulate parseSort behavior
-  function parseSort(sortOption, orderByOption) {
-    if (orderByOption) return orderByOption;
-    if (!sortOption) return undefined;
-    
-    const parts = sortOption.split(':');
-    const field = parts[0];
-    const direction = (parts[1] || 'desc').toUpperCase();
-    
-    return [{ field, direction }];
-  }
+  // Now uses parseSort imported from cli.js (no duplicate implementation)
 
   it('should parse simple sort field (defaults to DESC)', () => {
     const result = parseSort('value_usd');
@@ -321,18 +281,7 @@ describe('Sort Parsing', () => {
 // =================== Table Formatting ===================
 
 describe('Table Formatting', () => {
-  // Helper to simulate formatValue behavior
-  function formatValue(val) {
-    if (val === null || val === undefined) return '';
-    if (typeof val === 'number') {
-      if (Math.abs(val) >= 1000000) return (val / 1000000).toFixed(2) + 'M';
-      if (Math.abs(val) >= 1000) return (val / 1000).toFixed(2) + 'K';
-      if (Number.isInteger(val)) return val.toString();
-      return val.toFixed(2);
-    }
-    if (typeof val === 'object') return JSON.stringify(val);
-    return String(val);
-  }
+  // Now uses formatValue imported from cli.js (no duplicate implementation)
 
   it('should format large numbers with M suffix', () => {
     expect(formatValue(1000000)).toBe('1.00M');

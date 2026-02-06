@@ -4,10 +4,6 @@
 
 ## P1 - Should Have
 
-### Test Cleanup
-- [ ] Remove duplicated `parseArgs` in unit.test.js (now exported from cli.js)
-- [ ] Reduce cli.test.js subprocess tests to ~10 smoke tests
-
 ### Streaming Output
 - [ ] `--stream` flag for large result sets
 - [ ] Output as JSON lines (newline-delimited JSON)
