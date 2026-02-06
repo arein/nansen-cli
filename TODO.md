@@ -42,7 +42,7 @@
 
 ## Test Quality
 
-> Based on [TDD audit report](../clawd/agents/teddy/reports/nansen-cli-2026-02-06.md) - 2026-02-06
+> Based on TDD audit - 2026-02-06
 
 ### ~~P0 - Critical~~ ✅
 - [x] Refactor CLI for testability (index.js → cli.js extraction)
