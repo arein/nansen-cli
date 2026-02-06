@@ -40,6 +40,38 @@
 - [ ] Support multiple tokens: `--tokens '[...]'`
 - [ ] Reduce N calls to 1 call
 
+## Test Quality
+
+> Based on [TDD audit report](../clawd/agents/teddy/reports/nansen-cli-2026-02-06.md) - 2026-02-06
+
+### ~~P0 - Critical~~ ✅
+- [x] Refactor CLI for testability (index.js → cli.js extraction)
+- [x] Add cli.internal.test.js with direct function imports
+- [x] Add fake timers to retry tests (was 8s each, now instant)
+
+### P1 - High Priority
+- [ ] Test `--table` output formatting
+- [ ] Test config priority chain (ENV > ~/.nansen > local config.json)
+- [ ] Test `--no-retry` flag actually disables retry
+- [ ] Test `--retries N` custom retry count
+
+### P2 - Medium Priority  
+- [ ] Test `parseSort` with special characters in field names
+- [ ] Test `formatTable` with deeply nested objects
+- [ ] Mock login/logout flow (readline + stdin)
+- [ ] Test non-JSON error responses (HTML 502 pages)
+- [ ] Test HTTP date format in retry-after header
+
+### P3 - Nice to Have
+- [ ] Add snapshot tests for `--help` output
+- [ ] Document magic test addresses (e.g. Binance hot wallet)
+- [ ] Test Bitcoin address validation
+- [ ] Test stdin pipe mode for API key input
+
+### Test Smells to Address
+- [ ] Remove duplicated `parseArgs` in unit.test.js (now exported from cli.js)
+- [ ] Reduce cli.test.js subprocess tests to ~10 smoke tests
+
 ## Nice to Have
 
 ### Streaming Output
