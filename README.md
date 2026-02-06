@@ -4,7 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/tests-138%20passing-brightgreen.svg)]()
 
-Command-line interface for the [Nansen API](https://docs.nansen.ai). Designed for AI agents with structured JSON output.
+> **Built by agents, for agents.** We prioritize the best possible AI agent experience.
+
+Command-line interface for the [Nansen API](https://docs.nansen.ai) with structured JSON output, designed for AI agents and automation.
 
 ## Installation
 
@@ -144,12 +146,14 @@ Deep analytics for any token.
 
 ## AI Agent Integration
 
-The CLI is designed for AI agents and automation:
+This CLI is built specifically for AI agents. Every design decision prioritizes agent usability.
 
-- **Structured Output**: All responses are JSON with consistent schema
-- **Error Handling**: Errors include status codes and actionable details
+**Why agents love it:**
+- **Structured Output**: All responses are JSON with consistent schema — no parsing HTML or unstructured text
+- **Predictable Errors**: Errors include status codes and actionable details agents can handle programmatically
+- **Zero Config**: Works with just an API key — no complex setup
 - **Composable**: Commands can be chained with shell pipes
-- **Discoverable**: `help` commands at every level
+- **Discoverable**: `help` commands at every level for agent introspection
 
 ```json
 // Success response
@@ -169,6 +173,13 @@ The CLI is designed for AI agents and automation:
   "details": {...}
 }
 ```
+
+**Roadmap** (see [TODO.md](TODO.md)):
+- Rate limit handling with auto-retry
+- Structured error codes for programmatic handling
+- Schema discovery endpoint (`nansen schema`)
+- Field filtering to reduce response size
+- Response caching and batch queries
 
 ## Examples
 
@@ -206,6 +217,8 @@ NANSEN_API_KEY=your-key npm run test:live
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+
+**AI contributors:** See [CLAUDE.md](CLAUDE.md) for agent-specific guidance on contributing to this repo.
 
 ## API Coverage
 
