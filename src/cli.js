@@ -4,12 +4,17 @@
  */
 
 import { NansenAPI, saveConfig, deleteConfig, getConfigFile, clearCache, getCacheDir } from './api.js';
+import { getUpdateNotification, scheduleUpdateCheck } from './update-check.js';
+import { createRequire } from 'module';
 import * as readline from 'readline';
+
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require('../package.json');
 
 // ============= Schema Definition =============
 
 export const SCHEMA = {
-  version: '1.1.0',
+  version: VERSION,
   commands: {
     'smart-money': {
       description: 'Smart Money analytics - track sophisticated market participants',
@@ -278,7 +283,7 @@ export function parseArgs(args) {
       const key = arg.slice(2);
       const next = args[i + 1];
       
-      if (key === 'pretty' || key === 'help' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache' || key === 'stream') {
+      if (key === 'pretty' || key === 'help' || key === 'version' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache' || key === 'stream') {
         result.flags[key] = true;
       } else if (next && !next.startsWith('-')) {
         // Try to parse as JSON first
@@ -849,17 +854,28 @@ export async function runCLI(rawArgs, deps = {}) {
   } = deps;
 
   const { _: positional, flags, options } = parseArgs(rawArgs);
-  
+
   const command = positional[0] || 'help';
   const subArgs = positional.slice(1);
   const pretty = flags.pretty || flags.p;
   const table = flags.table || flags.t;
   const stream = flags.stream || flags.s;
 
+  // Update check (read cached result + schedule background refresh)
+  const updateNotification = getUpdateNotification(VERSION);
+  scheduleUpdateCheck();
+  const notify = () => { if (updateNotification) errorOutput(updateNotification); };
+
   const commands = { ...buildCommands(deps), ...commandOverrides };
+
+  if (flags.version || flags.v) {
+    output(VERSION);
+    return { type: 'version', data: VERSION };
+  }
 
   if (command === 'help' || flags.help || flags.h) {
     output(BANNER + HELP);
+    notify();
     return { type: 'help' };
   }
 
@@ -870,6 +886,7 @@ export async function runCLI(rawArgs, deps = {}) {
     };
     const formatted = formatOutput(errorData, { pretty, table });
     output(formatted.text);
+    notify();
     exit(1);
     return { type: 'error', data: errorData };
   }
@@ -882,9 +899,11 @@ export async function runCLI(rawArgs, deps = {}) {
     if (command === 'schema' && result) {
       const formatted = formatOutput(result, { pretty, table: false });
       output(formatted.text);
+      notify();
       return { type: 'schema', data: result };
     }
-    
+
+    notify();
     return { type: 'no-auth', command };
   }
 
@@ -916,17 +935,20 @@ export async function runCLI(rawArgs, deps = {}) {
       if (streamOutput) {
         output(streamOutput);
       }
+      notify();
       return { type: 'stream', data: result };
     }
-    
+
     const successData = { success: true, data: result };
     const formatted = formatOutput(successData, { pretty, table });
     output(formatted.text);
+    notify();
     return { type: 'success', data: result };
   } catch (error) {
     const errorData = formatError(error);
     const formatted = formatOutput(errorData, { pretty, table });
     errorOutput(formatted.text);
+    notify();
     exit(1);
     return { type: 'error', data: errorData };
   }

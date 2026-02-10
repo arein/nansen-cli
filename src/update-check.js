@@ -1,0 +1,95 @@
+/**
+ * Update check — lightweight, non-blocking, zero-dependency.
+ *
+ * getUpdateNotification(currentVersion) — reads cached result, returns string or null
+ * scheduleUpdateCheck()                — spawns detached background fetch if cache is stale
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.nansen');
+const CACHE_FILE = path.join(CONFIG_DIR, 'update-check.json');
+const STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const PACKAGE_NAME = 'nansen-cli';
+
+/**
+ * Compare two semver strings. Returns true if latest > current.
+ */
+function isNewer(latest, current) {
+  const parse = v => v.replace(/^v/, '').split('.').map(Number);
+  const [lM, lm, lp] = parse(latest);
+  const [cM, cm, cp] = parse(current);
+  if (lM !== cM) return lM > cM;
+  if (lm !== cm) return lm > cm;
+  return lp > cp;
+}
+
+/**
+ * Read the cached check result and return a notification string (or null).
+ */
+export function getUpdateNotification(currentVersion) {
+  try {
+    if (process.env.NO_UPDATE_NOTIFIER || process.env.CI) return null;
+    if (!fs.existsSync(CACHE_FILE)) return null;
+
+    const raw = fs.readFileSync(CACHE_FILE, 'utf8');
+    const { latest } = JSON.parse(raw);
+    if (!latest) return null;
+
+    if (isNewer(latest, currentVersion)) {
+      return `Update available: ${currentVersion} → ${latest}  (npm i -g ${PACKAGE_NAME})`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * If the cache is missing or stale, spawn a detached background process to refresh it.
+ */
+export function scheduleUpdateCheck() {
+  try {
+    if (process.env.NO_UPDATE_NOTIFIER || process.env.CI) return;
+
+    // Check staleness
+    if (fs.existsSync(CACHE_FILE)) {
+      const { checkedAt } = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      if (checkedAt && Date.now() - checkedAt < STALE_MS) return;
+    }
+
+    // Inline script executed by the detached child
+    const script = `
+      const https = require('https');
+      const fs = require('fs');
+      const path = require('path');
+      const dir = ${JSON.stringify(CONFIG_DIR)};
+      const file = ${JSON.stringify(CACHE_FILE)};
+      const req = https.get('https://registry.npmjs.org/${PACKAGE_NAME}/latest', { timeout: 5000 }, (res) => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          try {
+            const { version } = JSON.parse(body);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { mode: 0o700, recursive: true });
+            fs.writeFileSync(file, JSON.stringify({ latest: version, checkedAt: Date.now() }));
+          } catch {}
+        });
+      });
+      req.on('error', () => {});
+      req.setTimeout(5000, () => req.destroy());
+    `;
+
+    const child = spawn(process.execPath, ['-e', script], {
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+  } catch {
+    // silent
+  }
+}
