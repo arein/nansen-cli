@@ -151,7 +151,7 @@ export const SCHEMA = {
         },
         'flows': {
           description: 'Token flow metrics',
-          options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, limit: { type: 'number' } },
+          options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, days: { type: 'number', default: 30 }, limit: { type: 'number' } },
           returns: ['label', 'inflow', 'outflow', 'net_flow', 'wallet_count']
         },
         'dex-trades': {
@@ -166,12 +166,12 @@ export const SCHEMA = {
         },
         'who-bought-sold': {
           description: 'Recent buyers and sellers',
-          options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, limit: { type: 'number' } },
+          options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, days: { type: 'number', default: 30 }, limit: { type: 'number' } },
           returns: ['wallet_address', 'side', 'amount', 'value_usd', 'timestamp', 'labels']
         },
         'flow-intelligence': {
           description: 'Detailed flow intelligence by label',
-          options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, limit: { type: 'number' } },
+          options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, days: { type: 'number', default: 30 } },
           returns: ['label', 'inflow_usd', 'outflow_usd', 'net_flow_usd', 'unique_wallets']
         },
         'transfers': {
@@ -751,7 +751,7 @@ export function buildCommands(deps = {}) {
         'labels': () => apiInstance.addressLabels({ address, chain, pagination }),
         'transactions': () => apiInstance.addressTransactions({ address, chain, filters, orderBy, pagination, days }),
         'pnl': () => apiInstance.addressPnl({ address, chain }),
-        'search': () => apiInstance.entitySearch({ query: options.query, pagination }),
+        'search': () => apiInstance.entitySearch({ query: options.query }),
         'historical-balances': () => apiInstance.addressHistoricalBalances({ address, chain, filters, orderBy, pagination, days }),
         'related-wallets': () => apiInstance.addressRelatedWallets({ address, chain, filters, orderBy, pagination }),
         'counterparties': () => apiInstance.addressCounterparties({ address, chain, filters, orderBy, pagination, days }),
@@ -797,7 +797,7 @@ export function buildCommands(deps = {}) {
         'dex-trades': () => apiInstance.tokenDexTrades({ tokenAddress, chain, onlySmartMoney, filters, orderBy, pagination, days }),
         'pnl': () => apiInstance.tokenPnlLeaderboard({ tokenAddress, chain, filters, orderBy, pagination, days }),
         'who-bought-sold': () => apiInstance.tokenWhoBoughtSold({ tokenAddress, chain, filters, orderBy, pagination, days }),
-        'flow-intelligence': () => apiInstance.tokenFlowIntelligence({ tokenAddress, chain, filters, orderBy, pagination, days }),
+        'flow-intelligence': () => apiInstance.tokenFlowIntelligence({ tokenAddress, chain, filters, orderBy, days }),
         'transfers': () => apiInstance.tokenTransfers({ tokenAddress, chain, filters, orderBy, pagination, days }),
         'jup-dca': () => apiInstance.tokenJupDca({ tokenAddress, filters, orderBy, pagination }),
         'perp-trades': () => apiInstance.tokenPerpTrades({ tokenSymbol, filters, orderBy, pagination, days }),

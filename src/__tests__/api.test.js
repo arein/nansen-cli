@@ -572,12 +572,12 @@ describe('NansenAPI', () => {
     describe('entitySearch', () => {
       it('should search for entities with correct endpoint', async () => {
         setupMock(MOCK_RESPONSES.entitySearch);
-        
+
         const result = await api.entitySearch({ query: 'Vitalik' });
-        
-        const body = expectFetchCalledWith('/api/beta/profiler/entity-name-search');
-        expect(body.parameters.query).toBe('Vitalik');
-        
+
+        const body = expectFetchCalledWith('/api/v1/search/entity-name');
+        expect(body.search_query).toBe('Vitalik');
+
         expect(result.results).toBeInstanceOf(Array);
         expect(result.results[0]).toHaveProperty('name', 'Vitalik Buterin');
         expect(result.results[0].addresses).toContain('0xd8da6bf26964af9d7eed9e03e53415d37aa96045');
@@ -1411,13 +1411,13 @@ describe('NansenAPI', () => {
 
     it('should handle special characters in entity search query', async () => {
       if (LIVE_TEST) return;
-      
+
       setupMock(MOCK_RESPONSES.entitySearch);
-      
+
       await api.entitySearch({ query: 'Test & Co. <script>' });
-      
-      const body = expectFetchCalledWith('/api/beta/profiler/entity-name-search');
-      expect(body.parameters.query).toBe('Test & Co. <script>');
+
+      const body = expectFetchCalledWith('/api/v1/search/entity-name');
+      expect(body.search_query).toBe('Test & Co. <script>');
     });
 
     it('should handle days=0', async () => {
