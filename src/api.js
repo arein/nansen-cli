@@ -631,10 +631,9 @@ export class NansenAPI {
   }
 
   async entitySearch(params = {}) {
-    const { query, pagination } = params;
-    return this.request('/api/beta/profiler/entity-name-search', {
-      parameters: { query },
-      pagination
+    const { query } = params;
+    return this.request('/api/v1/search/entity-name', {
+      search_query: query
     });
   }
 
@@ -840,7 +839,7 @@ export class NansenAPI {
   }
 
   async tokenFlowIntelligence(params = {}) {
-    const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination, days = 30 } = params;
+    const { tokenAddress, chain = 'solana', filters = {}, orderBy, days = 30 } = params;
     if (tokenAddress) {
       const validation = validateTokenAddress(tokenAddress, chain);
       if (!validation.valid) throw new NansenError(validation.error, validation.code);
@@ -852,8 +851,7 @@ export class NansenAPI {
       chain,
       date: { from, to },
       filters,
-      order_by: orderBy,
-      pagination
+      order_by: orderBy
     });
   }
 
