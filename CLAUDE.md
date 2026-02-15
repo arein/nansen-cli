@@ -178,6 +178,15 @@ Structured error codes for programmatic handling:
 - **Beta endpoints** (`/api/beta/...`) may have different pagination
 - **EVM vs Solana addresses** — validation auto-detects based on chain param
 
+## Changesets
+
+Every PR that changes user-facing behavior must include a changeset:
+```bash
+npx changeset
+```
+Choose `patch` for bug fixes, `minor` for new features, `major` for breaking changes.
+CI will not publish without a changeset.
+
 ## PR Checklist
 
 - [ ] Tests pass (`npm test`)

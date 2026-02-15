@@ -12,7 +12,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:live": "NANSEN_LIVE_TEST=1 vitest run"
+    "test:live": "NANSEN_LIVE_TEST=1 vitest run",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish"
   },
   "keywords": [
     "nansen",
@@ -41,6 +44,8 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.5.1",
+    "@changesets/cli": "^2.29.4",
     "@vitest/coverage-v8": "^4.0.18",
     "vitest": "^4.0.18"
   }
