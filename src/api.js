@@ -720,13 +720,13 @@ export class NansenAPI {
   }
 
   async addressPerpPositions(params = {}) {
-    const { address, filters = {}, orderBy, pagination } = params;
+    const { address, filters = {}, orderBy } = params;
     // Perp positions work with HL addresses (not validated)
+    // Note: This endpoint does NOT support pagination parameter
     return this.request('/api/v1/profiler/perp-positions', {
       address,
       filters,
-      order_by: orderBy,
-      pagination
+      order_by: orderBy
     });
   }
 

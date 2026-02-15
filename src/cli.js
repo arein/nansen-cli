@@ -816,7 +816,7 @@ EXAMPLES:
   nansen profiler search --query "Vitalik"
 
   # Get token holders with filters
-  nansen token holders --token 0x123... --filters '{"only_smart_money":true}'
+  nansen token holders --token 0x123... --smart-money
 
 SMART MONEY LABELS:
   Fund, Smart Trader, 30D Smart Trader, 90D Smart Trader, 
@@ -1117,12 +1117,13 @@ export function buildCommands(deps = {}) {
       // Convenience filter for smart money only
       const onlySmartMoney = options['smart-money'] || flags['smart-money'] || false;
       if (onlySmartMoney) {
-        filters.only_smart_money = true;
+        filters.include_smart_money_labels = filters.include_smart_money_labels || 
+          ['Fund', 'Smart Trader', '30D Smart Trader', '90D Smart Trader', '180D Smart Trader'];
       }
 
       const handlers = {
         'screener': () => apiInstance.tokenScreener({ chains, timeframe, filters, orderBy, pagination }),
-        'holders': () => apiInstance.tokenHolders({ tokenAddress, chain, filters, orderBy, pagination }),
+        'holders': () => apiInstance.tokenHolders({ tokenAddress, chain, labelType: onlySmartMoney ? 'smart_money' : 'all_holders', filters, orderBy, pagination }),
         'flows': () => {
           const date = parseDateOption(options.date, days);
           return apiInstance.tokenFlows({ tokenAddress, chain, filters, orderBy, pagination, days, date });
