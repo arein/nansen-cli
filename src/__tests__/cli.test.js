@@ -68,10 +68,12 @@ describe('CLI Smoke Tests', () => {
     const { stdout, stderr, exitCode } = runCLI('smart-money netflow', {
       env: { NANSEN_API_KEY: 'invalid-key' }
     });
-    
+
     // Should fail with auth error but still output valid JSON (error goes to stderr)
+    // Parse first JSON line only (stderr may contain update notifications)
     const output = stdout || stderr;
-    const result = JSON.parse(output);
+    const firstLine = output.split('\n').find(l => l.startsWith('{'));
+    const result = JSON.parse(firstLine);
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     expect(result.code).toBeDefined();
@@ -110,8 +112,10 @@ describe('CLI Smoke Tests', () => {
     });
     
     // Will fail auth but proves env var is being read (error goes to stderr)
+    // Parse first JSON line only (stderr may contain update notifications)
     const output = stdout || stderr;
-    const result = JSON.parse(output);
+    const firstLine = output.split('\n').find(l => l.startsWith('{'));
+    const result = JSON.parse(firstLine);
     expect(result.success).toBe(false);
     expect(['UNAUTHORIZED', 'PAYMENT_REQUIRED']).toContain(result.code);
   });

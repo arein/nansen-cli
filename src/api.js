@@ -385,13 +385,7 @@ function parseRetryAfter(headerValue) {
 
 export class NansenAPI {
   constructor(apiKey = config.apiKey, baseUrl = config.baseUrl, options = {}) {
-    if (!apiKey) {
-      throw new NansenError(
-        'API key required. Run `nansen login` or set NANSEN_API_KEY environment variable.',
-        ErrorCode.UNAUTHORIZED
-      );
-    }
-    this.apiKey = apiKey;
+    this.apiKey = apiKey || null;
     this.baseUrl = baseUrl;
     this.retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...options.retry };
     this.cacheOptions = { 
@@ -434,7 +428,7 @@ export class NansenAPI {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': this.apiKey,
+            ...(this.apiKey ? { 'apikey': this.apiKey } : {}),
             ...options.headers
           },
           body: JSON.stringify(NansenAPI.cleanBody(body))
