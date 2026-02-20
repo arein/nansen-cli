@@ -170,7 +170,7 @@ export const SCHEMA = {
           options: {
             token: { type: 'string', required: true, description: 'Token address' },
             chain: { type: 'string', default: 'solana' },
-            timeframe: { type: 'string', default: '24h', enum: ['5m', '10m', '1h', '6h', '24h', '7d', '30d'] }
+            timeframe: { type: 'string', default: '1d', enum: ['5m', '1h', '6h', '12h', '1d', '7d'] }
           },
           returns: ['token_address', 'token_symbol', 'token_name', 'chain', 'price_usd', 'volume_usd', 'market_cap', 'holder_count', 'liquidity_usd']
         },
@@ -1191,7 +1191,7 @@ export function buildCommands(deps = {}) {
       }
 
       const handlers = {
-        'info': () => apiInstance.tokenInformation({ tokenAddress, chain, timeframe }),
+        'info': () => apiInstance.tokenInformation({ tokenAddress, chain, timeframe: options.timeframe }),
         'screener': async () => {
           const search = options.search;
           // When searching, fetch more results to filter from (API has no server-side search)
