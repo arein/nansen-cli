@@ -165,6 +165,14 @@ export const SCHEMA = {
     'token': {
       description: 'Token God Mode - deep analytics for any token',
       subcommands: {
+        'indicators': {
+          description: 'Risk and reward indicators for a token (Nansen Score)',
+          options: {
+            token: { type: 'string', required: true, description: 'Token address' },
+            chain: { type: 'string', default: 'ethereum' }
+          },
+          returns: ['token_info[market_cap_usd, market_cap_group, is_stablecoin]', 'risk_indicators[indicator_type, score, signal, signal_percentile, last_trigger_on]', 'reward_indicators[indicator_type, score, signal, signal_percentile, last_trigger_on]']
+        },
         'info': {
           description: 'Get detailed information for a specific token',
           options: {
@@ -836,9 +844,9 @@ COMMANDS:
   profiler       Wallet profiling (balance, labels, transactions, pnl, pnl-summary, search,
                    historical-balances, related-wallets, counterparties, perp-positions, perp-trades,
                    batch, trace, compare)
-  token          Token God Mode (info, screener, holders, flows, dex-trades, pnl, who-bought-sold,
-                   flow-intelligence, transfers, jup-dca, perp-trades, perp-positions,
-                   perp-pnl-leaderboard)
+  token          Token God Mode (info, indicators, screener, holders, flows, dex-trades, pnl,
+                   who-bought-sold, flow-intelligence, transfers, jup-dca, perp-trades,
+                   perp-positions, perp-pnl-leaderboard)
   portfolio      Portfolio analytics (defi)
   perp           Perpetual futures analytics (screener, leaderboard)
   points         Nansen Points analytics (leaderboard)
@@ -1191,6 +1199,7 @@ export function buildCommands(deps = {}) {
       }
 
       const handlers = {
+        'indicators': () => apiInstance.tokenIndicators({ tokenAddress, chain }),
         'info': () => apiInstance.tokenInformation({ tokenAddress, chain, timeframe: options.timeframe }),
         'screener': async () => {
           const search = options.search;

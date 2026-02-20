@@ -975,6 +975,18 @@ export class NansenAPI {
     });
   }
 
+  async tokenIndicators(params = {}) {
+    const { tokenAddress, chain = 'ethereum' } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new NansenError(validation.error, validation.code);
+    }
+    return this.request('/api/v1/tgm/indicators', {
+      token_address: tokenAddress,
+      chain
+    });
+  }
+
   async tokenInformation(params = {}) {
     const { tokenAddress, chain = 'solana', timeframe = '1d' } = params;
     if (tokenAddress) {

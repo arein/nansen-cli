@@ -142,6 +142,17 @@ const MOCK_RESPONSES = {
       { token: 'ETH', side: 'short', pnl_usd: 5000 }
     ]
   },
+  tokenIndicators: {
+    token_address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
+    chain: 'ethereum',
+    token_info: { market_cap_usd: 1500000000, market_cap_group: 'largecap', is_stablecoin: false },
+    risk_indicators: [
+      { indicator_type: 'liquidity-risk', score: 'low', signal: 0.2, signal_percentile: 30.5, last_trigger_on: '2025-01-15' }
+    ],
+    reward_indicators: [
+      { indicator_type: 'price-momentum', score: 'bullish', signal: 0.75, signal_percentile: 85.5, last_trigger_on: '2025-01-10' }
+    ]
+  },
   // New Token God Mode endpoints
   tokenFlowIntelligence: {
     flows: [
@@ -761,6 +772,26 @@ describe('NansenAPI', () => {
   // =================== Token God Mode Endpoints ===================
 
   describe('Token God Mode', () => {
+    describe('tokenIndicators', () => {
+      it('should fetch indicators with correct endpoint and body', async () => {
+        setupMock(MOCK_RESPONSES.tokenIndicators);
+
+        const result = await api.tokenIndicators({
+          tokenAddress: TEST_DATA.ethereum.token,
+          chain: 'ethereum'
+        });
+
+        const body = expectFetchCalledWith('/api/v1/tgm/indicators');
+        if (body) {
+          expect(body.token_address).toBe(TEST_DATA.ethereum.token);
+          expect(body.chain).toBe('ethereum');
+        }
+
+        expect(result.risk_indicators).toBeInstanceOf(Array);
+        expect(result.reward_indicators).toBeInstanceOf(Array);
+      });
+    });
+
     describe('tokenScreener', () => {
       it('should screen tokens with correct endpoint and body', async () => {
         setupMock(MOCK_RESPONSES.tokenScreener);

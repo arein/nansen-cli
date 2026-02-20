@@ -32,6 +32,7 @@ const DOCUMENTED_ENDPOINTS = {
     { name: 'perp-trades', method: 'addressPerpTrades', endpoint: '/api/v1/profiler/perp-trades' },
   ],
   tokenGodMode: [
+    { name: 'indicators', method: 'tokenIndicators', endpoint: '/api/v1/tgm/indicators' },
     { name: 'screener', method: 'tokenScreener', endpoint: '/api/v1/token-screener' },
     { name: 'holders', method: 'tokenHolders', endpoint: '/api/v1/tgm/holders' },
     { name: 'flows', method: 'tokenFlows', endpoint: '/api/v1/tgm/flows' },
