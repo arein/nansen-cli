@@ -1572,7 +1572,7 @@ export async function runCLI(rawArgs, deps = {}) {
   } catch (error) {
     const errorData = formatError(error);
     const formatted = formatOutput(errorData, { pretty, table, csv });
-    errorOutput(formatted.text);
+    output(formatted.text);
     notify();
     exit(1);
     return { type: 'error', data: errorData };
