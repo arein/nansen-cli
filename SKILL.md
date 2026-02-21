@@ -101,7 +101,7 @@ nansen portfolio defi --wallet 0x123...
 
 ## Supported Chains
 
-ethereum, solana, base, bnb, arbitrum, polygon, optimism, avalanche, linea, scroll, zksync, mantle, ronin, sei, sonic, monad, hyperevm
+ethereum, solana, base, bnb, arbitrum, polygon, optimism, avalanche, linea, scroll, mantle, ronin, sei, plasma, sonic, monad, hyperevm, iotaevm
 
 ## Smart Money Labels
 
@@ -117,32 +117,7 @@ nansen schema smart-money --pretty
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| `command not found: nansen` | Run `npm install -g nansen-cli` or use `npx nansen-cli` |
-| `UNAUTHORIZED` after login | Check `cat ~/.nansen/config.json` — key may not have saved. Write it directly. |
-| Login hangs or fails | Skip `nansen login`, write config directly (see Setup Option A above) |
-| Huge JSON response | Use `--fields` to select only needed columns |
-| Perp endpoints empty | Use `--symbol BTC` not `--token`. Perps are Hyperliquid-only. |
-
-## Known Endpoint Issues
-
-### Chain/Token-Specific Limitations
-- `token holders --smart-money` — Fails with `UNSUPPORTED_FILTER` for tokens without smart money tracking (e.g., WCT on Optimism). Not all tokens have smart money data. Do not retry.
-- `token flow-intelligence` — May return all-zero flows for tokens without significant smart money activity. This is normal, not an error.
-
-### Credit Management
-- `profiler labels` and `profiler balance` consume credits. Budget ~20 calls per session.
-- `Insufficient credits` (403, code `CREDITS_EXHAUSTED`) is a hard stop — no retry will help.
-- Check your Nansen dashboard for credit balance: [app.nansen.ai](https://app.nansen.ai).
-- Run balance checks in batches of 3-4 to avoid burning credits on rate-limit retries.
-
-### Error Codes to Watch
-| Code | Meaning | Action |
-|------|---------|--------|
-| `UNSUPPORTED_FILTER` | Filter not available for this token/chain | Remove the filter and retry, or skip this token |
-| `CREDITS_EXHAUSTED` | API credits depleted | Stop all API calls. Check dashboard. |
-| `RATE_LIMITED` | Too many requests (429) | Wait and retry (automatic with default retry) |
+See [AGENTS.md — Troubleshooting](AGENTS.md#troubleshooting) for the full troubleshooting guide, including error codes, known endpoint quirks, and pagination gotchas.
 
 ## Examples
 
