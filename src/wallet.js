@@ -602,9 +602,9 @@ export function buildWalletCommands(deps = {}) {
             return;
           }
 
-          // Confirm password for first wallet
+          // Confirm password for first wallet (skip if set via env var)
           const config = getWalletConfig();
-          if (!config.passwordHash) {
+          if (!config.passwordHash && !process.env.NANSEN_WALLET_PASSWORD) {
             const confirm = await promptPassword('Confirm password: ', deps);
             if (password !== confirm) {
               log('❌ Passwords do not match');
