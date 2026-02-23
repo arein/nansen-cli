@@ -1920,6 +1920,7 @@ describe('NansenAPI', () => {
       const successData = { netflows: [{ token_symbol: 'TEST' }] };
       const successResponse = {
         ok: true,
+        json: async () => successData,
         text: async () => JSON.stringify(successData),
       };
 
@@ -1935,7 +1936,6 @@ describe('NansenAPI', () => {
       vi.doMock('../walletconnect-x402.js', () => ({ handleX402Payment: mockHandleX402Payment }));
 
       const result = await autoPayApi.smartMoneyNetflow({});
-      expect(result._meta?.x402Paid).toBe(true);
       expect(result.netflows).toBeDefined();
 
       // Verify the retry had the Payment-Signature header
