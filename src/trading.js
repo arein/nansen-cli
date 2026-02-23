@@ -358,11 +358,13 @@ export async function waitForReceipt(chain, txHash, timeoutMs = 30000, pollMs = 
  * Simulate an EVM transaction via eth_call before broadcasting.
  * Returns { success: true } or { success: false, reason: string }.
  */
-export async function simulateEvmCall(chain, { from, to, data, value }) {
+export async function simulateEvmCall(chain, { from, to, data, value, gas }) {
   const rpcUrl = EVM_RPC_URLS[chain];
   if (!rpcUrl) return { success: true }; // Can't simulate, skip
 
   try {
+    const callObj = { from, to, data, value: value || '0x0' };
+    if (gas) callObj.gas = gas; // Pass gas limit to catch under-gassed quotes
     const res = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -370,7 +372,7 @@ export async function simulateEvmCall(chain, { from, to, data, value }) {
         jsonrpc: '2.0',
         id: 1,
         method: 'eth_call',
-        params: [{ from, to, data, value: value || '0x0' }, 'latest'],
+        params: [callObj, 'latest'],
       }),
     });
     const body = await res.json();
@@ -381,6 +383,64 @@ export async function simulateEvmCall(chain, { from, to, data, value }) {
     return { success: true };
   } catch {
     return { success: true }; // Network error — don't block, let broadcast decide
+  }
+}
+
+/**
+ * Estimate gas for an EVM transaction. Returns the gas estimate or null on failure.
+ * Used to fix under-gassed quotes from aggregators.
+ */
+export async function estimateEvmGas(chain, { from, to, data, value }) {
+  const rpcUrl = EVM_RPC_URLS[chain];
+  if (!rpcUrl) return null;
+
+  try {
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_estimateGas',
+        params: [{ from, to, data, value: value || '0x0' }],
+      }),
+    });
+    const body = await res.json();
+    if (body.error) return null;
+    return parseInt(body.result, 16);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check ERC-20 allowance for a given owner/spender pair.
+ * Returns the allowance as a BigInt, or 0n on failure.
+ */
+export async function checkErc20Allowance(chain, tokenAddress, ownerAddress, spenderAddress) {
+  const rpcUrl = EVM_RPC_URLS[chain];
+  if (!rpcUrl) return 0n;
+
+  try {
+    // allowance(address,address) selector = 0xdd62ed3e
+    const data = '0xdd62ed3e'
+      + ownerAddress.slice(2).toLowerCase().padStart(64, '0')
+      + spenderAddress.slice(2).toLowerCase().padStart(64, '0');
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_call',
+        params: [{ to: tokenAddress, data }, 'latest'],
+      }),
+    });
+    const body = await res.json();
+    if (body.error || !body.result) return 0n;
+    return BigInt(body.result);
+  } catch {
+    return 0n;
   }
 }
 
@@ -954,7 +1014,7 @@ EXAMPLES:
 
         const allQuotes = quoteData.response.quotes || [];
         if (!allQuotes.length) {
-          log('❌ No quote data found');
+          errorOutput('❌ No quote data found');
           exit(1);
           return;
         }
@@ -967,8 +1027,8 @@ EXAMPLES:
         // Check if any quote in range has transaction data before prompting for password
         const hasAnyTransaction = allQuotes.slice(startIndex, endIndex).some(q => q?.transaction);
         if (!hasAnyTransaction) {
-          log('❌ No quotes contain transaction data.');
-          log('  Ensure userWalletAddress was provided when fetching the quote.');
+          errorOutput('❌ No quotes contain transaction data.');
+          errorOutput('  Ensure userWalletAddress was provided when fetching the quote.');
           exit(1);
           return;
         }
@@ -998,17 +1058,17 @@ EXAMPLES:
 
           // Verify transaction data exists
           if (!currentQuote.transaction) {
-            log(`  ⚠ Quote ${quoteName}: no transaction data, skipping...`);
+            errorOutput(`  ⚠ Quote ${quoteName}: no transaction data, skipping...`);
             lastQuoteError = `Quote ${quoteName} has no transaction data`;
             continue;
           }
 
-          log(`\nExecuting trade on ${chainConfig.name}...`);
+          errorOutput(`\nExecuting trade on ${chainConfig.name}...`);
           if (endIndex - startIndex > 1) {
-            log(`  Trying quote ${qi + 1}/${allQuotes.length} (${quoteName})...`);
+            errorOutput(`  Trying quote ${qi + 1}/${allQuotes.length} (${quoteName})...`);
           }
-          log(formatQuote(currentQuote));
-          log('');
+          errorOutput(formatQuote(currentQuote));
+          errorOutput('');
 
           try {
             let signedTransaction;
@@ -1016,7 +1076,7 @@ EXAMPLES:
 
             if (chainType === 'solana') {
               // Solana: quote.transaction is base64 serialized VersionedTransaction
-              log('  Signing Solana transaction...');
+              errorOutput('  Signing Solana transaction...');
               signedTransaction = signSolanaTransaction(currentQuote.transaction, exported.solana.privateKey);
               requestId = currentQuote.metadata?.requestId;
 
@@ -1025,52 +1085,65 @@ EXAMPLES:
               const walletAddress = exported.evm.address;
 
               // Handle approval if needed — skip for native ETH
-              // Approval must happen BEFORE simulation, since eth_call checks
-              // on-chain allowance state (industry standard: LiFi, 1inch, etc.)
+              // Check existing allowance first to avoid unnecessary approve txs
+              // (industry standard: LiFi SDK checkAllowance, 1inch Permit2)
               const isNativeToken = /^0xe+$/i.test(currentQuote.inputMint);
               if (currentQuote.approvalAddress && !isNativeToken) {
-                log(`  ⚠ Approval required → ${currentQuote.approvalAddress}`);
-                log(`  Sending approval tx...`);
-                const approvalNonce = await getEvmNonce(chain, walletAddress);
-
-                const approvalGasPrice = currentQuote.transaction?.gasPrice || currentQuote.transaction?.maxFeePerGas || '1000000';
-                const approvalTxHex = buildApprovalTransaction(
-                  currentQuote.inputMint,
-                  currentQuote.approvalAddress,
-                  exported.evm.privateKey,
-                  chain,
-                  approvalNonce,
-                  approvalGasPrice,
+                // Check if sufficient allowance already exists
+                const inputAmount = BigInt(currentQuote.inputAmount || currentQuote.inAmount || currentQuote.transaction?.value || '0');
+                const existingAllowance = await checkErc20Allowance(
+                  chain, currentQuote.inputMint, walletAddress, currentQuote.approvalAddress
                 );
 
-                const approvalResult = await executeTransaction({
-                  signedTransaction: approvalTxHex,
-                  chain,
-                  simulate: !noSimulate,
-                });
+                if (existingAllowance >= inputAmount && existingAllowance > 0n) {
+                  errorOutput(`  ✓ Sufficient allowance exists for ${quoteName}, skipping approval`);
+                } else {
+                  errorOutput(`  ⚠ Approval required → ${currentQuote.approvalAddress}`);
+                  errorOutput(`  Sending approval tx...`);
+                  const approvalNonce = await getEvmNonce(chain, walletAddress);
 
-                if (approvalResult.status !== 'Success') {
-                  log(`  ❌ Approval failed for ${quoteName}: ${approvalResult.error || 'unknown error'}`);
-                  if (qi + 1 < endIndex) log(`  Trying next quote...`);
-                  lastQuoteError = `${quoteName} approval failed`;
-                  continue;
-                }
+                  const approvalGasPrice = currentQuote.transaction?.gasPrice || currentQuote.transaction?.maxFeePerGas || '1000000';
+                  const approvalTxHex = buildApprovalTransaction(
+                    currentQuote.inputMint,
+                    currentQuote.approvalAddress,
+                    exported.evm.privateKey,
+                    chain,
+                    approvalNonce,
+                    approvalGasPrice,
+                  );
 
-                log(`  Waiting for approval confirmation...`);
-                try {
-                  const receipt = await waitForReceipt(chain, approvalResult.txHash);
-                  log(`  ✓ Approval confirmed in block ${parseInt(receipt.blockNumber, 16)}: ${approvalResult.txHash}`);
-                } catch (receiptErr) {
-                  log(`  ❌ Approval may not have confirmed: ${receiptErr.message}`);
-                  if (qi + 1 < endIndex) log(`  Trying next quote...`);
-                  lastQuoteError = `${quoteName} approval unconfirmed`;
-                  continue;
+                  const approvalResult = await executeTransaction({
+                    signedTransaction: approvalTxHex,
+                    chain,
+                    simulate: !noSimulate,
+                  });
+
+                  if (approvalResult.status !== 'Success') {
+                    errorOutput(`  ❌ Approval failed for ${quoteName}: ${approvalResult.error || 'unknown error'}`);
+                    if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                    lastQuoteError = `${quoteName} approval failed`;
+                    continue;
+                  }
+
+                  errorOutput(`  Waiting for approval confirmation...`);
+                  try {
+                    const receipt = await waitForReceipt(chain, approvalResult.txHash);
+                    errorOutput(`  ✓ Approval confirmed in block ${parseInt(receipt.blockNumber, 16)}: ${approvalResult.txHash}`);
+                  } catch (receiptErr) {
+                    errorOutput(`  ❌ Approval may not have confirmed: ${receiptErr.message}`);
+                    if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                    lastQuoteError = `${quoteName} approval unconfirmed`;
+                    continue;
+                  }
+                  // Wait for RPC state propagation after approval
+                  await new Promise(r => setTimeout(r, 2000));
+                  errorOutput('');
                 }
-                log('');
               }
 
-              // Pre-flight simulation (EVM only) — catch reverts before spending gas
+              // Pre-flight simulation (EVM only) — catch logic reverts before spending gas
               // Runs AFTER approval so eth_call sees the current allowance state
+              // Simulates WITHOUT gas limit to check swap logic; gas re-estimation is separate
               if (!noSimulate) {
                 const txData = currentQuote.transaction;
                 const sim = await simulateEvmCall(chain, {
@@ -1080,19 +1153,38 @@ EXAMPLES:
                   value: txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0',
                 });
                 if (!sim.success) {
-                  log(`  ⚠ Simulation failed for ${quoteName}: ${sim.reason}`);
-                  if (qi + 1 < endIndex) log(`  Trying next quote...`);
+                  errorOutput(`  ⚠ Simulation failed for ${quoteName}: ${sim.reason}`);
+                  if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
                   lastQuoteError = `${quoteName} simulation failed: ${sim.reason}`;
                   continue;
                 }
               }
 
-              log('  Fetching nonce...');
+              // Re-estimate gas to fix under-gassed quotes from aggregators
+              // Use max(quote gas, estimate + 20% buffer) — matches LiFi SDK pattern
+              const txData = currentQuote.transaction;
+              const valueHex = txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0';
+              const estimatedGas = await estimateEvmGas(chain, {
+                from: walletAddress, to: txData.to, data: txData.data, value: valueHex,
+              });
+              if (estimatedGas) {
+                const quoteGas = parseInt(txData.gas || txData.gasLimit || '0');
+                const bufferedEstimate = Math.ceil(estimatedGas * 1.2);
+                const finalGas = Math.max(quoteGas, bufferedEstimate);
+                if (finalGas > quoteGas) {
+                  errorOutput(`  ⚠ Quote gas ${quoteGas} too low, using estimate ${finalGas} (${estimatedGas} + 20%)`);
+                }
+                // Update the transaction gas for signing
+                if (txData.gasLimit) txData.gasLimit = String(finalGas);
+                else txData.gas = String(finalGas);
+              }
+
+              errorOutput('  Fetching nonce...');
               await new Promise(r => setTimeout(r, 1000));
               const nonce = await getEvmNonce(chain, walletAddress);
-              log(`  Nonce: ${nonce}`);
+              errorOutput(`  Nonce: ${nonce}`);
 
-              log('  Signing EVM transaction...');
+              errorOutput('  Signing EVM transaction...');
               signedTransaction = signEvmTransaction(
                 currentQuote.transaction,
                 exported.evm.privateKey,
@@ -1101,7 +1193,7 @@ EXAMPLES:
               );
             }
 
-            log('  Broadcasting...');
+            errorOutput('  Broadcasting...');
             const execParams = {
               signedTransaction,
               chain,
@@ -1117,58 +1209,58 @@ EXAMPLES:
 
               // For EVM: verify the tx actually succeeded on-chain
               if (chainType === 'evm' && result.txHash) {
-                log('  Verifying on-chain status...');
+                errorOutput('  Verifying on-chain status...');
                 try {
                   await waitForReceipt(chain, result.txHash);
                 } catch (receiptErr) {
-                  log(`\n  ⚠ Transaction was broadcast but REVERTED on-chain!`);
-                  log(`    Tx Hash:   ${result.txHash}`);
-                  log(`    Explorer:  ${explorerUrl}`);
-                  log(`    Error:     ${receiptErr.message}`);
+                  errorOutput(`\n  ⚠ Transaction was broadcast but REVERTED on-chain!`);
+                  errorOutput(`    Tx Hash:   ${result.txHash}`);
+                  errorOutput(`    Explorer:  ${explorerUrl}`);
+                  errorOutput(`    Error:     ${receiptErr.message}`);
                   if (qi + 1 < endIndex) {
-                    log(`  Trying next quote...`);
+                    errorOutput(`  Trying next quote...`);
                     lastQuoteError = `${quoteName} reverted on-chain`;
                     continue;
                   }
-                  log(`\n  The trading API reported success, but the contract execution failed.`);
-                  log(`  This can happen due to: stale quotes, insufficient gas, or liquidity changes.`);
+                  errorOutput(`\n  The trading API reported success, but the contract execution failed.`);
+                  errorOutput(`  This can happen due to: stale quotes, insufficient gas, or liquidity changes.`);
                   exit(1);
                   return;
                 }
               }
 
-              log(`\n  ✓ Transaction successful!`);
-              log(`    Status:      ${result.status}`);
-              log(`    ${result.signature ? 'Signature' : 'Tx Hash'}:   ${txId}`);
-              log(`    Chain:       ${chainConfig.name} (${result.chainType})`);
-              log(`    Broadcaster: ${result.broadcaster}`);
-              log(`    Explorer:    ${explorerUrl}`);
+              errorOutput(`\n  ✓ Transaction successful!`);
+              errorOutput(`    Status:      ${result.status}`);
+              errorOutput(`    ${result.signature ? 'Signature' : 'Tx Hash'}:   ${txId}`);
+              errorOutput(`    Chain:       ${chainConfig.name} (${result.chainType})`);
+              errorOutput(`    Broadcaster: ${result.broadcaster}`);
+              errorOutput(`    Explorer:    ${explorerUrl}`);
 
               if (result.swapEvents?.length) {
-                log(`    Swaps:`);
+                errorOutput(`    Swaps:`);
                 result.swapEvents.forEach(e => {
-                  log(`      ${e.inputAmount} ${e.inputMint?.slice(0, 8)}... → ${e.outputAmount} ${e.outputMint?.slice(0, 8)}...`);
+                  errorOutput(`      ${e.inputAmount} ${e.inputMint?.slice(0, 8)}... → ${e.outputAmount} ${e.outputMint?.slice(0, 8)}...`);
                 });
               }
-              log('');
+              errorOutput('');
               return undefined; // Success — done
             } else {
-              log(`\n  ✗ Quote ${quoteName} failed: ${result.status}`);
-              if (result.error) log(`    Error:  ${result.error}`);
+              errorOutput(`\n  ✗ Quote ${quoteName} failed: ${result.status}`);
+              if (result.error) errorOutput(`    Error:  ${result.error}`);
               lastQuoteError = `${quoteName}: ${result.error || result.status}`;
-              if (qi + 1 < endIndex) log(`  Trying next quote...`);
+              if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
             }
 
           } catch (quoteErr) {
-            log(`  ❌ Quote ${quoteName} failed: ${quoteErr.message}`);
+            errorOutput(`  ❌ Quote ${quoteName} failed: ${quoteErr.message}`);
             lastQuoteError = `${quoteName}: ${quoteErr.message}`;
-            if (qi + 1 < endIndex) log(`  Trying next quote...`);
+            if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
           }
         }
 
         // All quotes exhausted
-        log(`\n❌ All quotes failed. Last error: ${lastQuoteError || 'unknown'}`);
-        log('');
+        errorOutput(`\n❌ All quotes failed. Last error: ${lastQuoteError || 'unknown'}`);
+        errorOutput('');
         exit(1);
         return undefined;
 
