@@ -1933,7 +1933,7 @@ describe('NansenAPI', () => {
       // Mock the dynamic import of x402.js
       const originalImport = vi.fn();
       const mockHandleX402Payment = vi.fn().mockResolvedValue('mock-payment-sig');
-      vi.doMock('../x402.js', () => ({ handleX402Payment: mockHandleX402Payment }));
+      vi.doMock('../walletconnect-x402.js', () => ({ handleX402Payment: mockHandleX402Payment }));
 
       const result = await autoPayApi.smartMoneyNetflow({});
       expect(result._meta?.x402Paid).toBe(true);
@@ -1944,7 +1944,7 @@ describe('NansenAPI', () => {
       const retryCall = mockFetch.mock.calls[1];
       expect(retryCall[1].headers['Payment-Signature']).toBe('mock-payment-sig');
 
-      vi.doUnmock('../x402.js');
+      vi.doUnmock('../walletconnect-x402.js');
     });
 
     it('should fall through to manual error when autoPay is disabled', async () => {
@@ -2045,7 +2045,7 @@ describe('NansenAPI', () => {
       mockFetch.mockResolvedValueOnce(errorResponse);
 
       // Mock x402 to throw
-      vi.doMock('../x402.js', () => ({
+      vi.doMock('../walletconnect-x402.js', () => ({
         handleX402Payment: vi.fn().mockRejectedValue(new Error('No wallet connected')),
       }));
 
@@ -2062,7 +2062,7 @@ describe('NansenAPI', () => {
       expect(thrownError.code).toBe(ErrorCode.PAYMENT_REQUIRED);
       expect(thrownError.message).toContain('auto-payment failed');
 
-      vi.doUnmock('../x402.js');
+      vi.doUnmock('../walletconnect-x402.js');
     });
   });
 
