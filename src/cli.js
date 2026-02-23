@@ -1527,10 +1527,12 @@ export async function runCLI(rawArgs, deps = {}) {
         return { type: 'command-help', command };
       }
     }
-    // Fallback to main help
-    output(BANNER + HELP);
-    notify();
-    return { type: 'help' };
+    // Commands with handlers (e.g. quote, execute) show their own usage
+    if (command === 'help' || !commands[command]) {
+      output(BANNER + HELP);
+      notify();
+      return { type: 'help' };
+    }
   }
 
   if (!commands[command]) {

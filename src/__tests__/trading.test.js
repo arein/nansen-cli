@@ -511,7 +511,7 @@ describe('buildTradingCommands', () => {
     const logs = [];
     let exitCalled = false;
     const cmds = buildTradingCommands({
-      log: (msg) => logs.push(msg),
+      errorOutput: (msg) => logs.push(msg),
       exit: () => { exitCalled = true; },
     });
 
@@ -524,7 +524,7 @@ describe('buildTradingCommands', () => {
     const logs = [];
     let exitCalled = false;
     const cmds = buildTradingCommands({
-      log: (msg) => logs.push(msg),
+      errorOutput: (msg) => logs.push(msg),
       exit: () => { exitCalled = true; },
     });
 
@@ -545,7 +545,7 @@ describe('buildTradingCommands', () => {
     });
 
     const cmds = buildTradingCommands({
-      log: (msg) => logs.push(msg),
+      errorOutput: (msg) => logs.push(msg),
       exit: () => { exitCalled = true; },
     });
 
@@ -569,7 +569,7 @@ describe('buildTradingCommands', () => {
     const logs = [];
     let exitCalled = false;
     const cmds = buildTradingCommands({
-      log: (msg) => logs.push(msg),
+      errorOutput: (msg) => logs.push(msg),
       exit: () => { exitCalled = true; },
     });
 
