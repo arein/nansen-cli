@@ -1024,24 +1024,9 @@ EXAMPLES:
               // EVM: quote.transaction is { to, data, value, gas, gasPrice }
               const walletAddress = exported.evm.address;
 
-              // Pre-flight simulation (EVM only) — catch reverts before spending gas
-              if (!noSimulate) {
-                const txData = currentQuote.transaction;
-                const sim = await simulateEvmCall(chain, {
-                  from: walletAddress,
-                  to: txData.to,
-                  data: txData.data,
-                  value: txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0',
-                });
-                if (!sim.success) {
-                  log(`  ⚠ Simulation failed for ${quoteName}: ${sim.reason}`);
-                  if (qi + 1 < endIndex) log(`  Trying next quote...`);
-                  lastQuoteError = `${quoteName} simulation failed: ${sim.reason}`;
-                  continue;
-                }
-              }
-
               // Handle approval if needed — skip for native ETH
+              // Approval must happen BEFORE simulation, since eth_call checks
+              // on-chain allowance state (industry standard: LiFi, 1inch, etc.)
               const isNativeToken = /^0xe+$/i.test(currentQuote.inputMint);
               if (currentQuote.approvalAddress && !isNativeToken) {
                 log(`  ⚠ Approval required → ${currentQuote.approvalAddress}`);
@@ -1082,6 +1067,24 @@ EXAMPLES:
                   continue;
                 }
                 log('');
+              }
+
+              // Pre-flight simulation (EVM only) — catch reverts before spending gas
+              // Runs AFTER approval so eth_call sees the current allowance state
+              if (!noSimulate) {
+                const txData = currentQuote.transaction;
+                const sim = await simulateEvmCall(chain, {
+                  from: walletAddress,
+                  to: txData.to,
+                  data: txData.data,
+                  value: txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0',
+                });
+                if (!sim.success) {
+                  log(`  ⚠ Simulation failed for ${quoteName}: ${sim.reason}`);
+                  if (qi + 1 < endIndex) log(`  Trying next quote...`);
+                  lastQuoteError = `${quoteName} simulation failed: ${sim.reason}`;
+                  continue;
+                }
               }
 
               log('  Fetching nonce...');
