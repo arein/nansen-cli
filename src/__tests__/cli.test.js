@@ -8,18 +8,27 @@
  * to coverage metrics, but they verify the real CLI works.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = path.join(__dirname, '..', 'index.js');
 
+// Create a mock walletconnect binary that reports "not connected"
+const MOCK_BIN_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'nansen-test-'));
+const MOCK_WC_PATH = path.join(MOCK_BIN_DIR, 'walletconnect');
+fs.writeFileSync(MOCK_WC_PATH, '#!/bin/sh\necho \'{"connected":false}\'\n');
+fs.chmodSync(MOCK_WC_PATH, 0o755);
+
 // Helper to run CLI commands
 function runCLI(args, options = {}) {
   const env = {
     ...process.env,
+    PATH: `${MOCK_BIN_DIR}:${process.env.PATH}`,
     NANSEN_API_KEY: 'test-key',
     ...options.env
   };
@@ -41,6 +50,10 @@ function runCLI(args, options = {}) {
 }
 
 describe('CLI Smoke Tests', () => {
+  afterAll(() => {
+    fs.rmSync(MOCK_BIN_DIR, { recursive: true, force: true });
+  });
+
   // =================== Help & Basic Commands ===================
 
   it('should show help', () => {
@@ -65,11 +78,11 @@ describe('CLI Smoke Tests', () => {
   // =================== JSON Output Format ===================
 
   it('should output valid JSON on error', () => {
-    const { stdout, stderr, exitCode } = runCLI('smart-money netflow --no-auto-pay', {
+    const { stdout, stderr, exitCode } = runCLI('smart-money netflow', {
       env: { NANSEN_API_KEY: 'invalid-key' }
     });
 
-    // Should fail with auth error but still output valid JSON (error goes to stderr)
+    // Should fail with network error but still output valid JSON (error goes to stderr)
     // Parse first JSON line only (stderr may contain update notifications)
     const output = stdout || stderr;
     const firstLine = output.split('\n').find(l => l.startsWith('{'));
@@ -113,7 +126,7 @@ describe('CLI Smoke Tests', () => {
   // =================== Environment Variables ===================
 
   it('should use NANSEN_API_KEY from environment', () => {
-    const { stdout, stderr } = runCLI('smart-money netflow --no-auto-pay', {
+    const { stdout, stderr } = runCLI('smart-money netflow', {
       env: { NANSEN_API_KEY: 'test-env-key' }
     });
     

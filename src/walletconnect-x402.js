@@ -46,7 +46,7 @@ function exec(cmd, args, timeoutMs = 10000) {
  */
 export async function checkWalletConnection() {
   try {
-    const output = await exec('walletconnect', ['whoami', '--json']);
+    const output = await exec('walletconnect', ['whoami', '--json'], 3000);
     const data = JSON.parse(output);
     if (data.connected === false) return null;
     return data;

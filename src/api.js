@@ -412,7 +412,6 @@ export class NansenAPI {
       ttl: options.cache?.ttl ?? DEFAULT_CACHE_TTL
     };
     this.defaultHeaders = options.defaultHeaders || {};
-    this.autoPay = options.autoPay ?? true;
   }
 
   static cleanBody(body) {

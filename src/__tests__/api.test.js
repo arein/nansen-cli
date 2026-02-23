@@ -1927,8 +1927,7 @@ describe('NansenAPI', () => {
         .mockResolvedValueOnce(errorResponse)
         .mockResolvedValueOnce(successResponse);
 
-      // Create API with autoPay enabled, and mock x402 module
-      const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai', { autoPay: true });
+      const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai');
 
       // Mock the dynamic import of x402.js
       const originalImport = vi.fn();
@@ -1947,45 +1946,6 @@ describe('NansenAPI', () => {
       vi.doUnmock('../walletconnect-x402.js');
     });
 
-    it('should fall through to manual error when autoPay is disabled', async () => {
-      if (LIVE_TEST) return;
-
-      const paymentReqs = {
-        accepts: [{
-          scheme: 'exact',
-          asset: '0xUSDC',
-          payTo: '0xRecipient',
-          amount: '10000',
-          network: 'base',
-          extra: { name: 'USD Coin', version: '2', chainId: 8453 },
-        }],
-      };
-      const paymentHeader = btoa(JSON.stringify(paymentReqs));
-
-      const errorResponse = {
-        ok: false,
-        status: 402,
-        json: async () => ({ message: 'Payment required' }),
-        headers: { get: (h) => h === 'payment-required' ? paymentHeader : null },
-      };
-
-      mockFetch.mockResolvedValueOnce(errorResponse);
-
-      const noAutoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai', { autoPay: false });
-
-      let thrownError;
-      try {
-        await noAutoPayApi.smartMoneyNetflow({});
-      } catch (err) {
-        thrownError = err;
-      }
-
-      expect(thrownError).toBeDefined();
-      expect(thrownError.code).toBe(ErrorCode.PAYMENT_REQUIRED);
-      expect(thrownError.message).toContain('x402-payment-signature');
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
     it('should fall through when manual Payment-Signature header is set', async () => {
       if (LIVE_TEST) return;
 
@@ -2002,7 +1962,6 @@ describe('NansenAPI', () => {
       mockFetch.mockResolvedValueOnce(errorResponse);
 
       const manualApi = new NansenAPI('test-key', 'https://api.nansen.ai', {
-        autoPay: true,
         defaultHeaders: { 'Payment-Signature': 'manual-sig' },
       });
 
@@ -2049,7 +2008,7 @@ describe('NansenAPI', () => {
         handleX402Payment: vi.fn().mockRejectedValue(new Error('No wallet connected')),
       }));
 
-      const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai', { autoPay: true });
+      const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai');
 
       let thrownError;
       try {
