@@ -42,6 +42,11 @@ describe('parseArgs', () => {
     expect(result.flags).toEqual({ pretty: true, table: true, 'no-retry': true });
   });
 
+  it('should parse --no-auto-pay flag', () => {
+    const result = parseArgs(['token', 'screener', '--no-auto-pay']);
+    expect(result.flags['no-auto-pay']).toBe(true);
+  });
+
   it('should parse short flags', () => {
     const result = parseArgs(['-p', '-t']);
     expect(result.flags).toEqual({ p: true, t: true });
@@ -1132,6 +1137,7 @@ describe('SCHEMA', () => {
     expect(SCHEMA.globalOptions.table).toBeDefined();
     expect(SCHEMA.globalOptions.fields).toBeDefined();
     expect(SCHEMA.globalOptions['no-retry']).toBeDefined();
+    expect(SCHEMA.globalOptions['no-auto-pay']).toBeDefined();
   });
 
   it('should list supported chains', () => {

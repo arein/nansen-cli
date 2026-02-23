@@ -412,6 +412,7 @@ export class NansenAPI {
       ttl: options.cache?.ttl ?? DEFAULT_CACHE_TTL
     };
     this.defaultHeaders = options.defaultHeaders || {};
+    this.autoPay = options.autoPay ?? true;
   }
 
   static cleanBody(body) {
@@ -505,8 +506,12 @@ export class NansenAPI {
         } else if (code === ErrorCode.CREDITS_EXHAUSTED) {
           message = message.replace(/\.+$/, '') + '. No retry will help. Check your Nansen dashboard for credit balance.';
         } else if (code === ErrorCode.PAYMENT_REQUIRED) {
-          // Try x402 auto-payment with fallback across payment networks
-          if (!this.defaultHeaders['Payment-Signature']) {
+          // Try x402 auto-payment: local wallet (with network fallback), then WalletConnect
+          const hasManualSignature = !!(this.defaultHeaders['Payment-Signature'] || options.headers?.['Payment-Signature']);
+          let x402Paid = false;
+
+          if (!hasManualSignature) {
+            // 1. Try local wallet with fallback across payment networks
             try {
               const { createPaymentSignatures } = await import('./x402.js');
               for await (const { signature, network } of createPaymentSignatures(response, url)) {
@@ -537,16 +542,52 @@ export class NansenAPI {
                 }
                 // This payment option was rejected, try next
               }
-            } catch { /* x402 auto-pay unavailable, fall through */ }
-          }
-          message = 'Payment required. To access this endpoint:\n  • Set an API key: nansen login --api-key <key>  (get one at https://app.nansen.ai/api)\n  • Or pay per call: nansen wallet create, fund with USDC on Base or Solana (from $0.01/call, min $0.05 balance)\n  • Docs: https://docs.x402.org';
-          const paymentHeader = response.headers.get('payment-required');
-          if (paymentHeader) {
-            try {
-              data.paymentRequirements = JSON.parse(atob(paymentHeader));
-            } catch {
-              data.paymentRequiredRaw = paymentHeader;
+            } catch { /* local wallet unavailable, try WalletConnect */ }
+
+            // 2. Fall back to WalletConnect (walletconnect-x402.js)
+            if (!x402Paid) {
+              let paymentRequirements;
+              const paymentHeader = response.headers.get('payment-required');
+              if (paymentHeader) {
+                try {
+                  paymentRequirements = JSON.parse(atob(paymentHeader));
+                } catch {
+                  data.paymentRequiredRaw = paymentHeader;
+                }
+              }
+              if (!paymentRequirements && data.paymentRequirements) {
+                paymentRequirements = data.paymentRequirements;
+              }
+
+              if (paymentRequirements) {
+                try {
+                  const { handleX402Payment } = await import('./walletconnect-x402.js');
+                  const paymentSignature = await handleX402Payment(paymentRequirements);
+                  const paidResponse = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-Client-Type': 'nansen-cli',
+                      'X-Client-Version': packageVersion,
+                      'Payment-Signature': paymentSignature,
+                      ...this.defaultHeaders,
+                      ...options.headers,
+                    },
+                    body: JSON.stringify(NansenAPI.cleanBody(body)),
+                  });
+                  if (paidResponse.ok) {
+                    return await paidResponse.json();
+                  }
+                } catch (x402Err) {
+                  message = `x402 auto-payment failed: ${x402Err.message}`;
+                }
+                data.paymentRequirements = paymentRequirements;
+              }
             }
+          }
+
+          if (!message || message === data.message) {
+            message = 'Payment required (x402). Sign the paymentRequirements below per https://docs.x402.org and pass the result with --x402-payment-signature <value>.';
           }
         }
 
