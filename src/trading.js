@@ -1168,7 +1168,7 @@ EXAMPLES:
                 from: walletAddress, to: txData.to, data: txData.data, value: valueHex,
               });
               if (estimatedGas) {
-                const quoteGas = parseInt(txData.gas || txData.gasLimit || '0');
+                const quoteGas = parseInt(currentQuote.gas || txData.gas || txData.gasLimit || '0');
                 const bufferedEstimate = Math.ceil(estimatedGas * 1.2);
                 const finalGas = Math.max(quoteGas, bufferedEstimate);
                 if (finalGas > quoteGas) {
