@@ -1866,6 +1866,180 @@ describe('NansenAPI', () => {
     });
   });
 
+  // =================== x402 Auto-Payment ===================
+
+  describe('x402 Auto-Payment', () => {
+    it('should auto-pay on 402 and retry successfully', async () => {
+      if (LIVE_TEST) return;
+
+      const paymentReqs = {
+        accepts: [{
+          scheme: 'exact',
+          asset: '0xUSDC',
+          payTo: '0xRecipient',
+          amount: '10000',
+          network: 'base',
+          maxTimeoutSeconds: 120,
+          extra: { name: 'USD Coin', version: '2', chainId: 8453, symbol: 'USDC', decimals: 6 },
+        }],
+      };
+      const paymentHeader = btoa(JSON.stringify(paymentReqs));
+
+      const errorResponse = {
+        ok: false,
+        status: 402,
+        json: async () => ({ message: 'Payment required' }),
+        headers: { get: (h) => h === 'payment-required' ? paymentHeader : null },
+      };
+      const successData = { netflows: [{ token_symbol: 'TEST' }] };
+      const successResponse = {
+        ok: true,
+        text: async () => JSON.stringify(successData),
+      };
+
+      mockFetch
+        .mockResolvedValueOnce(errorResponse)
+        .mockResolvedValueOnce(successResponse);
+
+      // Create API with autoPay enabled, and mock x402 module
+      const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai', { autoPay: true });
+
+      // Mock the dynamic import of x402.js
+      const originalImport = vi.fn();
+      const mockHandleX402Payment = vi.fn().mockResolvedValue('mock-payment-sig');
+      vi.doMock('../x402.js', () => ({ handleX402Payment: mockHandleX402Payment }));
+
+      const result = await autoPayApi.smartMoneyNetflow({});
+      expect(result._meta?.x402Paid).toBe(true);
+      expect(result.netflows).toBeDefined();
+
+      // Verify the retry had the Payment-Signature header
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const retryCall = mockFetch.mock.calls[1];
+      expect(retryCall[1].headers['Payment-Signature']).toBe('mock-payment-sig');
+
+      vi.doUnmock('../x402.js');
+    });
+
+    it('should fall through to manual error when autoPay is disabled', async () => {
+      if (LIVE_TEST) return;
+
+      const paymentReqs = {
+        accepts: [{
+          scheme: 'exact',
+          asset: '0xUSDC',
+          payTo: '0xRecipient',
+          amount: '10000',
+          network: 'base',
+          extra: { name: 'USD Coin', version: '2', chainId: 8453 },
+        }],
+      };
+      const paymentHeader = btoa(JSON.stringify(paymentReqs));
+
+      const errorResponse = {
+        ok: false,
+        status: 402,
+        json: async () => ({ message: 'Payment required' }),
+        headers: { get: (h) => h === 'payment-required' ? paymentHeader : null },
+      };
+
+      mockFetch.mockResolvedValueOnce(errorResponse);
+
+      const noAutoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai', { autoPay: false });
+
+      let thrownError;
+      try {
+        await noAutoPayApi.smartMoneyNetflow({});
+      } catch (err) {
+        thrownError = err;
+      }
+
+      expect(thrownError).toBeDefined();
+      expect(thrownError.code).toBe(ErrorCode.PAYMENT_REQUIRED);
+      expect(thrownError.message).toContain('x402-payment-signature');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fall through when manual Payment-Signature header is set', async () => {
+      if (LIVE_TEST) return;
+
+      const paymentReqs = { accepts: [{ scheme: 'exact', asset: '0xUSDC', payTo: '0xR', amount: '1', extra: { name: 'X', version: '1', chainId: 1 } }] };
+      const paymentHeader = btoa(JSON.stringify(paymentReqs));
+
+      const errorResponse = {
+        ok: false,
+        status: 402,
+        json: async () => ({ message: 'Payment required' }),
+        headers: { get: (h) => h === 'payment-required' ? paymentHeader : null },
+      };
+
+      mockFetch.mockResolvedValueOnce(errorResponse);
+
+      const manualApi = new NansenAPI('test-key', 'https://api.nansen.ai', {
+        autoPay: true,
+        defaultHeaders: { 'Payment-Signature': 'manual-sig' },
+      });
+
+      let thrownError;
+      try {
+        await manualApi.smartMoneyNetflow({});
+      } catch (err) {
+        thrownError = err;
+      }
+
+      expect(thrownError).toBeDefined();
+      expect(thrownError.code).toBe(ErrorCode.PAYMENT_REQUIRED);
+      // Should use the manual error message, not attempt auto-pay
+      expect(thrownError.message).toContain('x402-payment-signature');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should propagate x402 auto-pay failure as error', async () => {
+      if (LIVE_TEST) return;
+
+      const paymentReqs = {
+        accepts: [{
+          scheme: 'exact',
+          asset: '0xUSDC',
+          payTo: '0xR',
+          amount: '1',
+          network: 'base',
+          extra: { name: 'X', version: '1', chainId: 1 },
+        }],
+      };
+      const paymentHeader = btoa(JSON.stringify(paymentReqs));
+
+      const errorResponse = {
+        ok: false,
+        status: 402,
+        json: async () => ({ message: 'Payment required' }),
+        headers: { get: (h) => h === 'payment-required' ? paymentHeader : null },
+      };
+
+      mockFetch.mockResolvedValueOnce(errorResponse);
+
+      // Mock x402 to throw
+      vi.doMock('../x402.js', () => ({
+        handleX402Payment: vi.fn().mockRejectedValue(new Error('No wallet connected')),
+      }));
+
+      const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai', { autoPay: true });
+
+      let thrownError;
+      try {
+        await autoPayApi.smartMoneyNetflow({});
+      } catch (err) {
+        thrownError = err;
+      }
+
+      expect(thrownError).toBeDefined();
+      expect(thrownError.code).toBe(ErrorCode.PAYMENT_REQUIRED);
+      expect(thrownError.message).toContain('auto-payment failed');
+
+      vi.doUnmock('../x402.js');
+    });
+  });
+
   // =================== Supported Chains ===================
 
   describe('Supported Chains', () => {

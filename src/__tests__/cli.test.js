@@ -65,7 +65,7 @@ describe('CLI Smoke Tests', () => {
   // =================== JSON Output Format ===================
 
   it('should output valid JSON on error', () => {
-    const { stdout, stderr, exitCode } = runCLI('smart-money netflow', {
+    const { stdout, stderr, exitCode } = runCLI('smart-money netflow --no-auto-pay', {
       env: { NANSEN_API_KEY: 'invalid-key' }
     });
 
@@ -107,7 +107,7 @@ describe('CLI Smoke Tests', () => {
   // =================== Environment Variables ===================
 
   it('should use NANSEN_API_KEY from environment', () => {
-    const { stdout, stderr } = runCLI('smart-money netflow', {
+    const { stdout, stderr } = runCLI('smart-money netflow --no-auto-pay', {
       env: { NANSEN_API_KEY: 'test-env-key' }
     });
     

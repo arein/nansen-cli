@@ -396,6 +396,7 @@ export class NansenAPI {
       ttl: options.cache?.ttl ?? DEFAULT_CACHE_TTL
     };
     this.defaultHeaders = options.defaultHeaders || {};
+    this.autoPay = options.autoPay ?? true;
   }
 
   static cleanBody(body) {
@@ -489,15 +490,65 @@ export class NansenAPI {
         } else if (code === ErrorCode.CREDITS_EXHAUSTED) {
           message = message.replace(/\.+$/, '') + '. No retry will help. Check your Nansen dashboard for credit balance.';
         } else if (code === ErrorCode.PAYMENT_REQUIRED) {
-          message = 'Payment required (x402). Sign the paymentRequirements below per https://docs.x402.org and pass the result with --x402-payment-signature <value>.';
+          // Payment requirements can come from header (base64) or JSON body
+          let paymentRequirements;
           const paymentHeader = response.headers.get('payment-required');
           if (paymentHeader) {
             try {
-              data.paymentRequirements = JSON.parse(atob(paymentHeader));
+              paymentRequirements = JSON.parse(atob(paymentHeader));
             } catch {
               data.paymentRequiredRaw = paymentHeader;
             }
           }
+          if (!paymentRequirements && data.paymentRequirements) {
+            paymentRequirements = data.paymentRequirements;
+          }
+
+          // Auto-pay via WalletConnect if enabled and no manual signature was provided
+          const hasManualSignature = !!(this.defaultHeaders['Payment-Signature'] || options.headers?.['Payment-Signature']);
+          if (this.autoPay && !hasManualSignature && paymentRequirements) {
+            try {
+              const { handleX402Payment } = await import('./x402.js');
+              const paymentSignature = await handleX402Payment(paymentRequirements);
+              // Retry the original request with the payment signature
+              const paidResponse = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Client-Type': 'nansen-cli',
+                  'X-Client-Version': packageVersion,
+                  ...(this.apiKey ? { 'apikey': this.apiKey } : {}),
+                  ...this.defaultHeaders,
+                  ...options.headers,
+                  'Payment-Signature': paymentSignature
+                },
+                body: JSON.stringify(NansenAPI.cleanBody(body))
+              });
+              let paidData;
+              const paidText = await paidResponse.text();
+              try {
+                paidData = JSON.parse(paidText);
+              } catch {
+                // Non-JSON response from paid request
+                throw new Error(`Server returned ${paidResponse.status}: ${paidText.slice(0, 200)}`);
+              }
+              if (paidResponse.ok) {
+                paidData._meta = { ...(paidData._meta || {}), x402Paid: true };
+                if (useCache) setCachedResponse(endpoint, body, paidData);
+                return paidData;
+              }
+              // Paid request also failed — fall through to normal error handling
+              data = paidData;
+              message = paidData.message || paidData.error || `API error after x402 payment: ${paidResponse.status}`;
+            } catch (x402Err) {
+              // Auto-pay failed — fall through to manual instructions
+              message = `x402 auto-payment failed: ${x402Err.message}`;
+            }
+          } else {
+            message = 'Payment required (x402). Sign the paymentRequirements below per https://docs.x402.org and pass the result with --x402-payment-signature <value>.';
+          }
+
+          if (paymentRequirements) data.paymentRequirements = paymentRequirements;
         }
 
         lastError = new NansenError(message, code, response.status, {

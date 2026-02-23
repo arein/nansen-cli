@@ -318,7 +318,8 @@ export const SCHEMA = {
     'no-retry': { type: 'boolean', description: 'Disable automatic retry on rate limits/errors' },
     retries: { type: 'number', default: 3, description: 'Max retry attempts' },
     format: { type: 'string', enum: ['json', 'csv'], description: 'Output format (default: json)' },
-    'x402-payment-signature': { type: 'string', description: 'Pre-signed x402 payment signature header' }
+    'x402-payment-signature': { type: 'string', description: 'Pre-signed x402 payment signature header' },
+    'no-auto-pay': { type: 'boolean', description: 'Disable automatic x402 payment via WalletConnect' }
   },
   chains: ['ethereum', 'solana', 'base', 'bnb', 'arbitrum', 'polygon', 'optimism', 'avalanche', 'linea', 'scroll', 'mantle', 'ronin', 'sei', 'plasma', 'sonic', 'monad', 'hyperevm', 'iotaevm'],
   smartMoneyLabels: ['Fund', 'Smart Trader', '30D Smart Trader', '90D Smart Trader', '180D Smart Trader', 'Smart HL Perps Trader']
@@ -867,6 +868,7 @@ GLOBAL OPTIONS:
   --no-retry     Disable automatic retry on rate limits/errors
   --retries <n>  Max retry attempts (default: 3)
   --x402-payment-signature <sig>  Pre-signed x402 payment signature header
+  --no-auto-pay  Disable automatic x402 payment via WalletConnect
   --cache        Enable response caching (default: off)
   --no-cache     Disable cache for this request
   --cache-ttl <s> Cache TTL in seconds (default: 300)
@@ -1572,7 +1574,8 @@ export async function runCLI(rawArgs, deps = {}) {
     if (options['x402-payment-signature']) {
       defaultHeaders['Payment-Signature'] = options['x402-payment-signature'];
     }
-    const api = new NansenAPIClass(undefined, undefined, { retry: retryOptions, cache: cacheOptions, defaultHeaders });
+    const autoPay = !flags['no-auto-pay'] && !options['x402-payment-signature'];
+    const api = new NansenAPIClass(undefined, undefined, { retry: retryOptions, cache: cacheOptions, defaultHeaders, autoPay });
     let result = await commands[command](subArgs, api, flags, options);
     
     // Apply field filtering if --fields is specified
