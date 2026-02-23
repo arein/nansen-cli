@@ -308,7 +308,7 @@ function warnIfInsecurePerms(filePath) {
   } catch { /* ignore stat errors */ }
 }
 
-function getWalletConfig() {
+export function getWalletConfig() {
   if (!fs.existsSync(getWalletConfigPath())) {
     return { defaultWallet: null, passwordHash: null };
   }
@@ -728,6 +728,60 @@ export function buildWalletCommands(deps = {}) {
           }
         },
 
+        'send': async () => {
+          const { sendTokens } = await import('./transfer.js');
+          
+          if (!options.to) {
+            log('❌ --to <address> is required');
+            exit(1);
+            return;
+          }
+          
+          if (!options.amount) {
+            log('❌ --amount <number> is required');
+            exit(1);
+            return;
+          }
+          
+          if (!options.chain) {
+            log('❌ --chain <evm|solana> is required');
+            exit(1);
+            return;
+          }
+          
+          if (!['evm', 'solana', 'ethereum', 'base'].includes(options.chain)) {
+            log('❌ --chain must be one of: evm, solana, ethereum, base');
+            exit(1);
+            return;
+          }
+          
+          const password = process.env.NANSEN_WALLET_PASSWORD || await promptPassword('Enter wallet password: ', deps);
+          
+          try {
+            const result = await sendTokens({
+              to: options.to,
+              amount: options.amount,
+              chain: options.chain,
+              token: options.token || null,
+              wallet: options.wallet || null,
+              password,
+            });
+            
+            return {
+              success: true,
+              transactionHash: result.transactionHash,
+              from: result.from,
+              to: result.to,
+              amount: result.amount,
+              token: result.token,
+              chain: result.chain,
+            };
+          } catch (err) {
+            log(JSON.stringify({ success: false, error: err.message }));
+            exit(1);
+          }
+        },
+
         'help': async () => {
           log(`
 Wallet Management - Local key storage for EVM and Solana
@@ -742,21 +796,32 @@ COMMANDS:
   export <name>              Export private keys (requires password)
   default <name>             Set the default wallet
   delete <name>              Delete a wallet (requires password)
+  send --to <address> --amount <number> --chain <evm|solana> [--token <address>] [--wallet <name>]
+                             Send tokens or native currency
 
 OPTIONS:
   --name <label>             Wallet name (default: "default")
+  --to <address>             Recipient address (required for send)
+  --amount <number>          Amount to send in human-readable format (required for send)
+  --chain <evm|solana>       Blockchain to use (required for send)
+  --token <address>          Token contract/mint address (optional, sends native if omitted)
+  --wallet <name>            Wallet to use (optional, uses default if omitted)
 
 ENVIRONMENT:
   NANSEN_WALLET_PASSWORD     Password for non-interactive use (e.g. CI/scripts)
+  NANSEN_EVM_RPC            Custom EVM RPC endpoint
+  NANSEN_SOLANA_RPC         Custom Solana RPC endpoint
 
 EXAMPLES:
   nansen wallet create --name trading
   nansen wallet list
   nansen wallet export trading
   nansen wallet default trading
+  nansen wallet send --to 0x742d35Cc... --amount 1.5 --chain evm
+  nansen wallet send --to 9WzDXw... --amount 0.1 --chain solana --token So11...
 `);
           return {
-            commands: ['create', 'list', 'show', 'export', 'default', 'delete'],
+            commands: ['create', 'list', 'show', 'export', 'default', 'delete', 'send'],
             description: 'Local wallet management for EVM and Solana',
           };
         },
