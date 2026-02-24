@@ -1163,6 +1163,15 @@ EXAMPLES:
               // Re-estimate gas to fix under-gassed quotes from aggregators
               // Use max(quote gas, estimate + 20% buffer) — matches LiFi SDK pattern
               const txData = currentQuote.transaction;
+
+              // Always prefer quote.gas over transaction.gas (API already applies 1.5x buffer)
+              const apiGas = parseInt(currentQuote.gas || "0");
+              const txGas = parseInt(txData.gas || txData.gasLimit || "0");
+              if (apiGas > txGas) {
+                if (txData.gasLimit) txData.gasLimit = String(apiGas);
+                else txData.gas = String(apiGas);
+              }
+
               const valueHex = txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0';
               const estimatedGas = await estimateEvmGas(chain, {
                 from: walletAddress, to: txData.to, data: txData.data, value: valueHex,
