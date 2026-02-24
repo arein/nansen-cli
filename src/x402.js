@@ -35,37 +35,69 @@ export function parsePaymentRequirements(response) {
 }
 
 /**
- * Find the best payment requirement we can fulfill.
- * Prefers EVM (gasless EIP-3009) over Solana (requires facilitator fee payer).
+ * Rank payment requirements. Prefers EVM (gasless) over Solana.
+ * Returns all supported requirements in priority order.
  */
-function selectRequirement(requirements) {
-  const evm = requirements.find(r => isEvmNetwork(r.network));
-  if (evm) return evm;
+function rankRequirements(requirements) {
+  const ranked = [];
+  // EVM first (gasless for client)
+  for (const r of requirements) {
+    if (isEvmNetwork(r.network)) ranked.push(r);
+  }
+  // Then Solana
+  for (const r of requirements) {
+    if (isSvmNetwork(r.network)) ranked.push(r);
+  }
+  return ranked;
+}
 
-  const svm = requirements.find(r => isSvmNetwork(r.network));
-  if (svm) return svm;
+/**
+ * Build a payment signature for a single requirement.
+ * @returns {string|null} Base64 payment signature, or null on failure
+ */
+async function buildPaymentForRequirement(requirement, exported, url) {
+  if (isEvmNetwork(requirement.network)) {
+    return createEvmPaymentPayload(
+      requirement,
+      exported.evm.privateKey,
+      exported.evm.address,
+      url,
+    );
+  }
+
+  if (isSvmNetwork(requirement.network)) {
+    const rpcUrl = getSolanaRpcUrl(requirement.network);
+    const blockhash = await fetchRecentBlockhash(rpcUrl);
+    return createSvmPaymentPayload(
+      requirement,
+      exported.solana.privateKey,
+      exported.solana.address,
+      url,
+      blockhash,
+    );
+  }
 
   return null;
 }
 
 /**
- * Attempt to auto-pay a 402 response.
+ * Generate payment signatures for all viable payment options, in priority order.
+ * Yields { signature, network } objects. Caller should try each until one succeeds.
  *
  * @param {Response} response - The 402 HTTP response
  * @param {string} url - The original request URL
  * @param {object} options - { password, walletName }
- * @returns {string|null} Payment-Signature header value, or null if can't pay
+ * @returns {AsyncGenerator<{ signature: string, network: string }>}
  */
-export async function createPaymentSignature(response, url, options = {}) {
+export async function* createPaymentSignatures(response, url, options = {}) {
   const requirements = parsePaymentRequirements(response);
-  if (!requirements || requirements.length === 0) return null;
+  if (!requirements || requirements.length === 0) return;
 
-  const requirement = selectRequirement(requirements);
-  if (!requirement) return null;
+  const ranked = rankRequirements(requirements);
+  if (ranked.length === 0) return;
 
-  // Get wallet — dynamically import wallet.js (from PR #26)
   const password = options.password || process.env.NANSEN_WALLET_PASSWORD;
-  if (!password) return null;
+  if (!password) return;
 
   let exportWallet, listWallets;
   try {
@@ -73,43 +105,45 @@ export async function createPaymentSignature(response, url, options = {}) {
     exportWallet = walletMod.exportWallet;
     listWallets = walletMod.listWallets;
   } catch {
-    // wallet.js not available (PR #26 not merged yet)
-    return null;
+    return;
   }
 
   const wallets = listWallets();
-  if (wallets.wallets.length === 0) return null;
+  if (wallets.wallets.length === 0) return;
 
   const walletName = options.walletName || wallets.defaultWallet;
-  if (!walletName) return null;
+  if (!walletName) return;
 
+  let exported;
   try {
-    const exported = exportWallet(walletName, password);
-
-    if (isEvmNetwork(requirement.network)) {
-      return createEvmPaymentPayload(
-        requirement,
-        exported.evm.privateKey,
-        exported.evm.address,
-        url,
-      );
-    }
-
-    if (isSvmNetwork(requirement.network)) {
-      const rpcUrl = getSolanaRpcUrl(requirement.network);
-      const blockhash = await fetchRecentBlockhash(rpcUrl);
-      return createSvmPaymentPayload(
-        requirement,
-        exported.solana.privateKey,
-        exported.solana.address,
-        url,
-        blockhash,
-      );
-    }
-
-    return null;
-  } catch (err) {
-    // Wallet decrypt failed or signing failed
-    return null;
+    exported = exportWallet(walletName, password);
+  } catch {
+    return;
   }
+
+  for (const req of ranked) {
+    try {
+      const sig = await buildPaymentForRequirement(req, exported, url);
+      if (sig) yield { signature: sig, network: req.network };
+    } catch {
+      // This payment option failed to build, try next
+      continue;
+    }
+  }
+}
+
+/**
+ * Attempt to auto-pay a 402 response (single-shot, returns first viable signature).
+ * For fallback support, use createPaymentSignatures() instead.
+ *
+ * @param {Response} response - The 402 HTTP response
+ * @param {string} url - The original request URL
+ * @param {object} options - { password, walletName }
+ * @returns {string|null} Payment-Signature header value, or null if can't pay
+ */
+export async function createPaymentSignature(response, url, options = {}) {
+  for await (const { signature } of createPaymentSignatures(response, url, options)) {
+    return signature;
+  }
+  return null;
 }
