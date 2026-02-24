@@ -1160,33 +1160,18 @@ EXAMPLES:
                 }
               }
 
-              // Re-estimate gas to fix under-gassed quotes from aggregators
-              // Use max(quote gas, estimate + 20% buffer) — matches LiFi SDK pattern
+              // Use the Trading API's gas estimation (quote.gas) directly.
+              // The API already applies a 1.5x buffer over eth_estimateGas.
+              // Skip client-side re-estimation — it adds latency and the API value is reliable.
               const txData = currentQuote.transaction;
-
-              // Always prefer quote.gas over transaction.gas (API already applies 1.5x buffer)
               const apiGas = parseInt(currentQuote.gas || "0");
               const txGas = parseInt(txData.gas || txData.gasLimit || "0");
-              if (apiGas > txGas) {
-                if (txData.gasLimit) txData.gasLimit = String(apiGas);
-                else txData.gas = String(apiGas);
+              const finalGas = apiGas > 0 ? apiGas : txGas;
+              if (finalGas !== txGas) {
+                errorOutput(`  ℹ Using API gas ${finalGas} (tx.gas was ${txGas})`);
               }
-
-              const valueHex = txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0';
-              const estimatedGas = await estimateEvmGas(chain, {
-                from: walletAddress, to: txData.to, data: txData.data, value: valueHex,
-              });
-              if (estimatedGas) {
-                const quoteGas = parseInt(currentQuote.gas || txData.gas || txData.gasLimit || '0');
-                const bufferedEstimate = Math.ceil(estimatedGas * 1.2);
-                const finalGas = Math.max(quoteGas, bufferedEstimate);
-                if (finalGas > quoteGas) {
-                  errorOutput(`  ⚠ Quote gas ${quoteGas} too low, using estimate ${finalGas} (${estimatedGas} + 20%)`);
-                }
-                // Update the transaction gas for signing
-                if (txData.gasLimit) txData.gasLimit = String(finalGas);
-                else txData.gas = String(finalGas);
-              }
+              if (txData.gasLimit) txData.gasLimit = String(finalGas);
+              else txData.gas = String(finalGas);
 
               errorOutput('  Fetching nonce...');
               await new Promise(r => setTimeout(r, 1000));
