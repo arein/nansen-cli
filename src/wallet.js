@@ -737,8 +737,9 @@ export function buildWalletCommands(deps = {}) {
             return;
           }
           
-          if (!options.amount) {
-            log('❌ --amount <number> is required');
+          const isMax = flags.max || options.amount === 'max';
+          if (!options.amount && !isMax) {
+            log('❌ --amount <number> or --max is required');
             exit(1);
             return;
           }
@@ -760,16 +761,19 @@ export function buildWalletCommands(deps = {}) {
           try {
             const result = await sendTokens({
               to: options.to,
-              amount: String(options.amount),
+              amount: isMax ? '0' : String(options.amount),
               chain: options.chain,
               token: options.token || null,
               wallet: options.wallet || null,
+              max: isMax,
               password,
             });
             
             const output = {
               success: true,
               transactionHash: result.transactionHash,
+              confirmed: result.confirmed,
+              ...(result.blockNumber ? { blockNumber: result.blockNumber } : {}),
               from: result.from,
               to: result.to,
               amount: result.amount,
@@ -798,16 +802,17 @@ COMMANDS:
   export <name>              Export private keys (requires password)
   default <name>             Set the default wallet
   delete <name>              Delete a wallet (requires password)
-  send --to <address> --amount <number> --chain <evm|solana> [--token <address>] [--wallet <name>]
-                             Send tokens or native currency
+  send --to <address> --amount <number> --chain <evm|solana> [--token <address>] [--wallet <name>] [--max]
+                             Send tokens or native currency (--max sends entire balance)
 
 OPTIONS:
   --name <label>             Wallet name (default: "default")
   --to <address>             Recipient address (required for send)
-  --amount <number>          Amount to send in human-readable format (required for send)
+  --amount <number>          Amount to send in human-readable format (required unless --max)
   --chain <evm|solana>       Blockchain to use (required for send)
   --token <address>          Token contract/mint address (optional, sends native if omitted)
   --wallet <name>            Wallet to use (optional, uses default if omitted)
+  --max                      Send entire balance (deducts gas for native transfers)
 
 ENVIRONMENT:
   NANSEN_WALLET_PASSWORD     Password for non-interactive use (e.g. CI/scripts)
