@@ -481,17 +481,18 @@ async function buildSolanaTransaction({ to, amount, amountStr, token, privateKey
 
     if (destAtaExists) {
       // Simple: just TransferChecked, no CreateATA needed
-      // Accounts: [owner(s,w), sourceATA(w), mint(r), destATA(w), tokenProgram(r)]
+      // Account ordering: writable first, then readonly (Solana message format requirement)
+      // Accounts: [owner(s,w), sourceATA(w), destATA(w), mint(r), tokenProgram(r)]
       accountKeys = [
         pubkey,        // 0: owner/feePayer (signer, writable)
         sourceATA,     // 1: source ATA (writable)
-        mintBuf,       // 2: mint (readonly)
-        destATA,       // 3: dest ATA (writable)
+        destATA,       // 2: dest ATA (writable)
+        mintBuf,       // 3: mint (readonly)
         tokenProgBuf,  // 4: token program (readonly)
       ];
       instructions = [{
         programIdIndex: 4,
-        accountIndices: [1, 2, 3, 0], // source, mint, dest, authority
+        accountIndices: [1, 3, 2, 0], // source, mint, dest, authority
         data: instrData,
       }];
       numReadonlyUnsigned = 2; // mint + tokenProgram
@@ -613,16 +614,25 @@ async function waitForEvmConfirmation(rpcUrl, txHash, timeoutMs = 30000) {
 
 async function waitForSolanaConfirmation(rpcUrl, txHash, timeoutMs = 30000) {
   stderr('  Waiting for confirmation...');
-  try {
-    const result = await rpcCall(rpcUrl, 'confirmTransaction', [txHash, { commitment: 'confirmed' }]);
-    if (result?.value?.err) throw new Error(`Transaction failed: ${JSON.stringify(result.value.err)}`);
-    stderr('  ✓ Confirmed');
-    return { confirmed: true };
-  } catch (e) {
-    if (e.message.includes('failed')) throw e;
-    stderr('  ⚠ Confirmation timed out (tx may still succeed)');
-    return { confirmed: false };
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const result = await rpcCall(rpcUrl, 'getSignatureStatuses', [[txHash]]);
+      const status = result?.value?.[0];
+      if (status) {
+        if (status.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          stderr(`  ✓ Confirmed (${status.confirmationStatus}, slot ${status.slot})`);
+          return { confirmed: true, slot: status.slot };
+        }
+      }
+    } catch (e) {
+      if (e.message.includes('failed')) throw e;
+    }
+    await new Promise(r => setTimeout(r, 2000));
   }
+  stderr('  ⚠ Confirmation timed out (tx may still succeed)');
+  return { confirmed: false };
 }
 
 // ============= Token Validation =============
