@@ -306,9 +306,12 @@ describe('sendTokens integration', () => {
         const responses = {
           'eth_getTransactionCount': '0x5',
           'eth_feeHistory': { baseFeePerGas: ['0x3b9aca00','0x3b9aca00','0x3b9aca00','0x3b9aca00','0x3b9aca00'] },
+          'eth_maxPriorityFeePerGas': '0x5F5E100', // 0.1 gwei
           'eth_getBalance': '0x8AC7230489E80000', // 10 ETH
           'eth_estimateGas': '0x5208', // 21000
           'eth_sendRawTransaction': '0xabc123',
+          'eth_getTransactionReceipt': { status: '0x1', blockNumber: '0x100' },
+          'eth_getCode': '0x6080604052', // non-empty bytecode
           'eth_call': '0x' + 'f'.repeat(64), // large balance for balanceOf, or decimals
         };
         return { json: () => Promise.resolve({ result: responses[body.method] || '0x0' }) };
@@ -331,19 +334,22 @@ describe('sendTokens integration', () => {
     });
 
     test('sends ERC-20 with correct decimals fetch', async () => {
-      let callCount = 0;
+      let ethCallCount = 0;
       fetch.mockImplementation(async (url, opts) => {
         const body = JSON.parse(opts.body);
         const responses = {
           'eth_getTransactionCount': '0x0',
           'eth_feeHistory': { baseFeePerGas: ['0x1','0x1','0x1','0x1','0x1'] },
+          'eth_maxPriorityFeePerGas': '0x5F5E100',
           'eth_estimateGas': '0xfe00',
           'eth_sendRawTransaction': '0xtoken_tx',
+          'eth_getTransactionReceipt': { status: '0x1', blockNumber: '0x100' },
+          'eth_getCode': '0x6080604052',
         };
         if (body.method === 'eth_call') {
-          callCount++;
-          // First eth_call = decimals(), second = balanceOf()
-          if (callCount === 1) return { json: () => Promise.resolve({ result: '0x0000000000000000000000000000000000000000000000000000000000000012' }) };
+          ethCallCount++;
+          // First eth_call = decimals (from validateErc20Token), second = balanceOf
+          if (ethCallCount === 1) return { json: () => Promise.resolve({ result: '0x0000000000000000000000000000000000000000000000000000000000000012' }) };
           return { json: () => Promise.resolve({ result: '0x' + 'f'.repeat(64) }) };
         }
         return { json: () => Promise.resolve({ result: responses[body.method] || '0x0' }) };
@@ -381,6 +387,7 @@ describe('sendTokens integration', () => {
         if (body.method === 'eth_getBalance') return { json: () => Promise.resolve({ result: '0x0' }) };
         if (body.method === 'eth_getTransactionCount') return { json: () => Promise.resolve({ result: '0x0' }) };
         if (body.method === 'eth_feeHistory') return { json: () => Promise.resolve({ result: { baseFeePerGas: ['0x3b9aca00','0x3b9aca00','0x3b9aca00','0x3b9aca00','0x3b9aca00'] } }) };
+        if (body.method === 'eth_maxPriorityFeePerGas') return { json: () => Promise.resolve({ result: '0x5F5E100' }) };
         return { json: () => Promise.resolve({ result: '0x0' }) };
       });
 
@@ -389,16 +396,19 @@ describe('sendTokens integration', () => {
     });
 
     test('rejects when ERC-20 balance is insufficient', async () => {
-      let callCount = 0;
+      let ethCallCount = 0;
       fetch.mockImplementation(async (url, opts) => {
         const body = JSON.parse(opts.body);
+        if (body.method === 'eth_getCode') return { json: () => Promise.resolve({ result: '0x6080604052' }) };
         if (body.method === 'eth_call') {
-          callCount++;
-          if (callCount === 1) return { json: () => Promise.resolve({ result: '0x0000000000000000000000000000000000000000000000000000000000000006' }) }; // decimals
+          ethCallCount++;
+          // First call = decimals (from validateErc20Token), second = balanceOf
+          if (ethCallCount === 1) return { json: () => Promise.resolve({ result: '0x0000000000000000000000000000000000000000000000000000000000000006' }) };
           return { json: () => Promise.resolve({ result: '0x0' }) }; // balanceOf = 0
         }
         if (body.method === 'eth_getTransactionCount') return { json: () => Promise.resolve({ result: '0x0' }) };
         if (body.method === 'eth_feeHistory') return { json: () => Promise.resolve({ result: { baseFeePerGas: ['0x1','0x1','0x1','0x1','0x1'] } }) };
+        if (body.method === 'eth_maxPriorityFeePerGas') return { json: () => Promise.resolve({ result: '0x5F5E100' }) };
         return { json: () => Promise.resolve({ result: '0x0' }) };
       });
 
@@ -417,6 +427,7 @@ describe('sendTokens integration', () => {
           'getLatestBlockhash': { value: { blockhash: 'GHtXQBpokWApVtJPBteD6jHQJPMBpfDY4PPnSr3DSEJQ' } },
           'getBalance': { value: 1000000000 }, // 1 SOL
           'sendTransaction': 'sol_sig_123',
+          'getSignatureStatuses': { value: [{ confirmationStatus: 'confirmed', slot: 12345, err: null }] },
         };
         return { json: () => Promise.resolve({ result: responses[body.method] || null }) };
       });

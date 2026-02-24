@@ -12,6 +12,8 @@ import { keccak256, base58Encode, exportWallet, getWalletConfig, verifyPassword 
 const DEFAULT_EVM_RPC = 'https://eth.public-rpc.com';
 const DEFAULT_SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
 
+const PRIORITY_FEE_DEFAULTS = { base: 100000000n, ethereum: 1500000000n, evm: 1500000000n };
+
 const ERC20_TRANSFER_SELECTOR = 'a9059cbb'; // transfer(address,uint256)
 const SYSTEM_PROGRAM = '11111111111111111111111111111111'; // 32 zero bytes in base58
 const ATA_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
@@ -74,6 +76,15 @@ function parseAmount(amountStr, decimals) {
   const whole = parts[0] || '0';
   let frac = (parts[1] || '').padEnd(decimals, '0').slice(0, decimals);
   return BigInt(whole) * (10n ** BigInt(decimals)) + BigInt(frac);
+}
+
+function formatAmount(rawAmount, decimals) {
+  const divisor = 10n ** BigInt(decimals);
+  const whole = rawAmount / divisor;
+  const frac = rawAmount % divisor;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${whole}.${fracStr}`;
 }
 
 // ============= RPC =============
@@ -213,7 +224,7 @@ function signSecp256k1(hash, privateKey) {
 
 // ============= EVM Transaction =============
 
-async function buildEvmTransaction({ to, amount, token, privateKey, chain }) {
+async function buildEvmTransaction({ to, amount, token, privateKey, chain, max = false }) {
   const rpcUrl = CHAIN_RPCS[chain] || CHAIN_RPCS.evm;
   const chainId = CHAIN_IDS[chain] || 1;
 
@@ -228,10 +239,23 @@ async function buildEvmTransaction({ to, amount, token, privateKey, chain }) {
   const nonceHex = await rpcCall(rpcUrl, 'eth_getTransactionCount', [from, 'latest']);
   const nonce = BigInt(nonceHex);
 
-  // Fees
+  // Fees — dynamic priority fee
   const feeHistory = await rpcCall(rpcUrl, 'eth_feeHistory', [4, 'latest', [50]]);
   const baseFee = BigInt(feeHistory.baseFeePerGas[feeHistory.baseFeePerGas.length - 1]);
-  const maxPriorityFee = 100000000n; // 0.1 gwei (Base is cheap)
+  let maxPriorityFee;
+  try {
+    const dynamicTip = await rpcCall(rpcUrl, 'eth_maxPriorityFeePerGas', []);
+    maxPriorityFee = BigInt(dynamicTip);
+  } catch {
+    // Fallback: median tip from fee history, or chain-specific default
+    const tips = (feeHistory.reward || []).map(r => r[0] ? BigInt(r[0]) : 0n).filter(t => t > 0n);
+    if (tips.length > 0) {
+      tips.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      maxPriorityFee = tips[Math.floor(tips.length / 2)];
+    } else {
+      maxPriorityFee = PRIORITY_FEE_DEFAULTS[chain] || PRIORITY_FEE_DEFAULTS.evm;
+    }
+  }
   const maxFee = baseFee * 2n + maxPriorityFee;
 
   let txTo, txValue, txData;
@@ -253,19 +277,43 @@ async function buildEvmTransaction({ to, amount, token, privateKey, chain }) {
     }
   } else {
     txTo = to;
-    txValue = amount;
     txData = Buffer.alloc(0);
 
-    // Pre-check: native ETH balance
+    // Native ETH balance check / max calculation
     const balHex = await rpcCall(rpcUrl, 'eth_getBalance', [from, 'latest']);
     const ethBalance = BigInt(balHex);
-    const estimatedCost = amount + maxFee * 21000n; // rough gas cost estimate
-    if (ethBalance < estimatedCost) {
-      throw new Error(`Insufficient ETH balance: have ${ethBalance} wei, need ~${estimatedCost} wei (${amount} value + gas)`);
+
+    if (max) {
+      // First estimate gas for a dummy transfer to get the right gasLimit
+      // (EIP-7702 delegated accounts need more than 21000)
+      let estGasLimit;
+      try {
+        const dummyEstimate = await rpcCall(rpcUrl, 'eth_estimateGas', [
+          { from, to, value: '0x1' },
+        ]);
+        estGasLimit = BigInt(dummyEstimate) * 120n / 100n;
+      } catch {
+        estGasLimit = 21000n;
+      }
+      // Reserve: L2 gas (gasLimit * maxFee) + L1 data fee buffer
+      // L1 fees on Base/OP are typically ~0.5-2% of L2 gas cost
+      // Use 3x L2 gas cost as safe total reserve
+      const l2GasCost = maxFee * estGasLimit;
+      const safeReserve = l2GasCost * 3n;
+      if (ethBalance <= safeReserve) throw new Error(`Insufficient balance: ${ethBalance} wei (need > ${safeReserve} for gas + L1 fees)`);
+      txValue = ethBalance - safeReserve;
+      amount = txValue;
+      stderr(`  Max send: ${formatAmount(txValue, 18)} ETH (reserved ${formatAmount(safeReserve, 18)} for gas)`);
+    } else {
+      txValue = amount;
+      const estimatedCost = amount + maxFee * 21000n;
+      if (ethBalance < estimatedCost) {
+        throw new Error(`Insufficient ETH balance: have ${ethBalance} wei, need ~${estimatedCost} wei (${amount} value + gas)`);
+      }
     }
   }
 
-  // Estimate gas dynamically instead of hardcoding
+  // Estimate gas dynamically
   const estimateParams = { from, to: txTo, data: txData.length > 0 ? '0x' + txData.toString('hex') : '0x' };
   if (txValue > 0n) estimateParams.value = bigIntToHex(txValue);
   let gasLimit;
@@ -303,7 +351,7 @@ async function buildEvmTransaction({ to, amount, token, privateKey, chain }) {
   ]);
 
   const rawTx = Buffer.concat([Buffer.from([0x02]), signed]);
-  return { signedTransaction: '0x' + rawTx.toString('hex') };
+  return { signedTransaction: '0x' + rawTx.toString('hex'), amount: txValue };
 }
 
 // ============= Solana Transaction =============
@@ -433,17 +481,18 @@ async function buildSolanaTransaction({ to, amount, amountStr, token, privateKey
 
     if (destAtaExists) {
       // Simple: just TransferChecked, no CreateATA needed
-      // Accounts: [owner(s,w), sourceATA(w), mint(r), destATA(w), tokenProgram(r)]
+      // Account ordering: writable first, then readonly (Solana message format requirement)
+      // Accounts: [owner(s,w), sourceATA(w), destATA(w), mint(r), tokenProgram(r)]
       accountKeys = [
         pubkey,        // 0: owner/feePayer (signer, writable)
         sourceATA,     // 1: source ATA (writable)
-        mintBuf,       // 2: mint (readonly)
-        destATA,       // 3: dest ATA (writable)
+        destATA,       // 2: dest ATA (writable)
+        mintBuf,       // 3: mint (readonly)
         tokenProgBuf,  // 4: token program (readonly)
       ];
       instructions = [{
         programIdIndex: 4,
-        accountIndices: [1, 2, 3, 0], // source, mint, dest, authority
+        accountIndices: [1, 3, 2, 0], // source, mint, dest, authority
         data: instrData,
       }];
       numReadonlyUnsigned = 2; // mint + tokenProgram
@@ -538,6 +587,78 @@ async function buildSolanaTransaction({ to, amount, amountStr, token, privateKey
 
 // ============= Broadcasting =============
 
+// ============= Confirmation =============
+
+function stderr(msg) { process.stderr.write(msg + '\n'); }
+
+async function waitForEvmConfirmation(rpcUrl, txHash, timeoutMs = 30000) {
+  stderr('  Waiting for confirmation...');
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const receipt = await rpcCall(rpcUrl, 'eth_getTransactionReceipt', [txHash]);
+      if (receipt) {
+        if (receipt.status === '0x0') throw new Error(`Transaction reverted on-chain: ${txHash}`);
+        const block = parseInt(receipt.blockNumber, 16);
+        stderr(`  ✓ Confirmed in block ${block}`);
+        return { confirmed: true, blockNumber: block };
+      }
+    } catch (e) {
+      if (e.message.includes('reverted')) throw e;
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  stderr('  ⚠ Confirmation timed out (tx may still succeed)');
+  return { confirmed: false };
+}
+
+async function waitForSolanaConfirmation(rpcUrl, txHash, timeoutMs = 30000) {
+  stderr('  Waiting for confirmation...');
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const result = await rpcCall(rpcUrl, 'getSignatureStatuses', [[txHash]]);
+      const status = result?.value?.[0];
+      if (status) {
+        if (status.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          stderr(`  ✓ Confirmed (${status.confirmationStatus}, slot ${status.slot})`);
+          return { confirmed: true, slot: status.slot };
+        }
+      }
+    } catch (e) {
+      if (e.message.includes('failed')) throw e;
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  stderr('  ⚠ Confirmation timed out (tx may still succeed)');
+  return { confirmed: false };
+}
+
+// ============= Token Validation =============
+
+async function validateErc20Token(rpcUrl, tokenAddress) {
+  // Check it's a contract
+  const code = await rpcCall(rpcUrl, 'eth_getCode', [tokenAddress, 'latest']);
+  if (!code || code === '0x' || code === '0x0') {
+    throw new Error(`Address ${tokenAddress} is not a contract — not a valid ERC-20 token`);
+  }
+  // Check decimals() is callable
+  try {
+    const decResult = await rpcCall(rpcUrl, 'eth_call', [{ to: tokenAddress, data: '0x313ce567' }, 'latest']);
+    const decimals = parseInt(decResult, 16);
+    if (isNaN(decimals) || decimals > 255) {
+      throw new Error(`Contract ${tokenAddress} returned invalid decimals — may not be a valid ERC-20 token`);
+    }
+    return decimals;
+  } catch (e) {
+    if (e.message.includes('not a valid')) throw e;
+    throw new Error(`Contract ${tokenAddress} does not implement ERC-20 decimals() — may not be a valid token`);
+  }
+}
+
+// ============= Broadcasting =============
+
 async function broadcastTransaction(signedTx, chain) {
   if (chain === 'solana') {
     return rpcCall(CHAIN_RPCS.solana, 'sendTransaction', [signedTx, {
@@ -552,10 +673,10 @@ async function broadcastTransaction(signedTx, chain) {
 // ============= Public API =============
 
 // Exported for testing
-export { rlpEncode, parseAmount, signSecp256k1, signEd25519, encodeCompactU16, base58Decode, base58DecodePubkey, deriveATA, validateEvmAddress, validateSolanaAddress, bigIntToHex };
+export { rlpEncode, parseAmount, formatAmount, signSecp256k1, signEd25519, encodeCompactU16, base58Decode, base58DecodePubkey, deriveATA, validateEvmAddress, validateSolanaAddress, bigIntToHex };
 
-export async function sendTokens({ to, amount, chain, token = null, wallet = null, password }) {
-  // Validate
+export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false }) {
+  // Validate address
   const validate = chain === 'solana' ? validateSolanaAddress : validateEvmAddress;
   const v = validate(to);
   if (!v.valid) throw new Error(`Invalid recipient: ${v.error}`);
@@ -569,36 +690,87 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
 
   let result;
   if (chain === 'solana') {
-    // For SPL tokens, decimals are fetched inside buildSolanaTransaction
-    // For native SOL, 9 decimals
+    if (max && !token) {
+      // Max native SOL: balance - 5000 lamports fee
+      const rpcUrl = CHAIN_RPCS.solana;
+      const fromAddr = walletData.solana.address;
+      const balResult = await rpcCall(rpcUrl, 'getBalance', [fromAddr, { commitment: 'confirmed' }]);
+      const solBalance = BigInt(balResult.value);
+      const fee = 5000n;
+      if (solBalance <= fee) throw new Error(`Insufficient SOL balance: ${solBalance} lamports (need > ${fee} for fees)`);
+      const maxAmount = solBalance - fee;
+      amount = formatAmount(maxAmount, 9);
+      stderr(`  Max send: ${amount} SOL`);
+    } else if (max && token) {
+      // Max SPL: full token balance
+      const rpcUrl = CHAIN_RPCS.solana;
+      const { tokenProgram, decimals } = await getTokenInfo(rpcUrl, token);
+      const sourceATA = deriveATA(walletData.solana.address, token, tokenProgram);
+      const sourceAtaAddr = base58Encode(sourceATA);
+      const ataInfo = await rpcCall(rpcUrl, 'getTokenAccountBalance', [sourceAtaAddr]);
+      amount = ataInfo.value.uiAmountString;
+      stderr(`  Max send: ${amount} (SPL token)`);
+    }
     const amountRaw = token ? null : parseAmount(amount, 9);
     result = await buildSolanaTransaction({
       to, amount: amountRaw, amountStr: amount, token,
       privateKey: walletData.solana.privateKey,
     });
   } else {
-    // For ERC-20, fetch decimals from contract; for native ETH, 18
+    const rpcUrl = CHAIN_RPCS[chain] || CHAIN_RPCS.evm;
+
+    // Validate ERC-20 token contract
     let decimals = 18;
     if (token) {
-      const rpcUrl = CHAIN_RPCS[chain] || CHAIN_RPCS.evm;
-      // Call decimals() on the token contract
-      const decResult = await rpcCall(rpcUrl, 'eth_call', [{ to: token, data: '0x313ce567' }, 'latest']);
-      decimals = parseInt(decResult, 16);
+      decimals = await validateErc20Token(rpcUrl, token);
     }
-    const amountRaw = parseAmount(amount, decimals);
+
+    if (max && token) {
+      // Max ERC-20: full token balance
+      const privBuf = Buffer.from(walletData.evm.privateKey, 'hex');
+      const ecdh = crypto.createECDH('secp256k1');
+      ecdh.setPrivateKey(privBuf);
+      const pubKey = ecdh.getPublicKey(null, 'uncompressed');
+      const from = '0x' + keccak256(pubKey.subarray(1)).subarray(12).toString('hex');
+      const balResult = await rpcCall(rpcUrl, 'eth_call', [{
+        to: token, data: '0x70a08231' + from.slice(2).padStart(64, '0'),
+      }, 'latest']);
+      const tokenBalance = BigInt(balResult || '0x0');
+      if (tokenBalance === 0n) throw new Error('Token balance is zero');
+      amount = formatAmount(tokenBalance, decimals);
+      stderr(`  Max send: ${amount} (ERC-20)`);
+    }
+
+    const amountRaw = (max && !token) ? 0n : parseAmount(amount, decimals);
     result = await buildEvmTransaction({
       to, amount: amountRaw, token,
       privateKey: walletData.evm.privateKey,
-      chain,
+      chain, max: max && !token,
     });
   }
 
   const txHash = await broadcastTransaction(result.signedTransaction, chain);
 
+  // Wait for confirmation
+  let confirmation;
+  if (chain === 'solana') {
+    confirmation = await waitForSolanaConfirmation(CHAIN_RPCS.solana, txHash);
+  } else {
+    const rpcUrl = CHAIN_RPCS[chain] || CHAIN_RPCS.evm;
+    confirmation = await waitForEvmConfirmation(rpcUrl, txHash);
+  }
+
+  // For max native sends, use the actual amount from the tx builder
+  const finalAmount = (max && !token && result.amount != null)
+    ? formatAmount(result.amount, chain === 'solana' ? 9 : 18)
+    : amount;
+
   return {
     success: true,
     transactionHash: txHash,
+    confirmed: confirmation.confirmed,
+    ...(confirmation.blockNumber ? { blockNumber: confirmation.blockNumber } : {}),
     from: chain === 'solana' ? walletData.solana.address : walletData.evm.address,
-    to, amount, token, chain,
+    to, amount: finalAmount, token, chain,
   };
 }
