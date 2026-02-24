@@ -6,9 +6,7 @@ import { test, expect, vi, beforeEach, describe } from 'vitest';
 import crypto from 'crypto';
 import {
   sendTokens,
-  rlpEncode,
   parseAmount,
-  signSecp256k1,
   signEd25519,
   encodeCompactU16,
   base58Decode,
@@ -18,7 +16,8 @@ import {
   validateSolanaAddress,
   bigIntToHex,
 } from '../transfer.js';
-import { keccak256, base58Encode } from '../wallet.js';
+import { keccak256, signSecp256k1, rlpEncode } from '../crypto.js';
+import { base58Encode } from '../wallet.js';
 import * as wallet from '../wallet.js';
 
 // ============= Unit Tests =============
@@ -172,10 +171,10 @@ describe('secp256k1 ECDSA Signing', () => {
     expect(sig.s.length).toBe(32);
   });
 
-  test('recovery is 0 or 1', () => {
+  test('v is 0 or 1', () => {
     const hash = crypto.randomBytes(32);
     const sig = signSecp256k1(hash, privKey);
-    expect([0, 1]).toContain(sig.recovery);
+    expect([0, 1]).toContain(sig.v);
   });
 
   test('produces different signatures for different hashes', () => {
