@@ -1,118 +1,54 @@
 # Changelog
 
-## 1.7.0
+All notable changes to the Nansen CLI will be documented in this file.
 
-### Minor Changes
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
-- [#26](https://github.com/nansen-ai/nansen-cli/pull/26) [`fe9c82a`](https://github.com/nansen-ai/nansen-cli/commit/fe9c82a60dbc3e0d178e08be00f3460993226c87) Thanks [@askeluv](https://github.com/askeluv)! - Add local wallet management for EVM and Solana (create, list, show, export, default, delete)
+## [1.7.0] - 2026-02-24
 
-- [#37](https://github.com/nansen-ai/nansen-cli/pull/37) [`8036971`](https://github.com/nansen-ai/nansen-cli/commit/8036971251313fc638b71f9f9eb5db9b27ad2ed4) Thanks [@TimNooren](https://github.com/TimNooren)! - Add quote and execute commands for DEX trading via the Nansen Trading API
-
-### Patch Changes
-
-- [#29](https://github.com/nansen-ai/nansen-cli/pull/29) [`3c403c9`](https://github.com/nansen-ai/nansen-cli/commit/3c403c9010d5a7902c94c734621381b4752ee2fb) Thanks [@oscarviolante1](https://github.com/oscarviolante1)! - Improve agent experience: add AGENTS.md quick-start guide, improve SKILL.md with non-interactive auth and troubleshooting, link AGENTS.md from README
-
-## 1.6.0
-
-### Minor Changes
-
-- [#21](https://github.com/nansen-ai/nansen-cli/pull/21) [`558dd02`](https://github.com/nansen-ai/nansen-cli/commit/558dd02e60bd83e40e00231bf86d2dd4f414cbdc) Thanks [@TimNooren](https://github.com/TimNooren)! - Add general search command for tokens and entities
-
-- [#25](https://github.com/nansen-ai/nansen-cli/pull/25) [`e4dcfee`](https://github.com/nansen-ai/nansen-cli/commit/e4dcfee1becae89643a94c26879754cf17fee443) Thanks [@TimNooren](https://github.com/TimNooren)! - Add token indicators command for Nansen Score risk/reward indicators
-
-- [#23](https://github.com/nansen-ai/nansen-cli/pull/23) [`9c0940b`](https://github.com/nansen-ai/nansen-cli/commit/9c0940b64d25c15f1f4d9edc10c92a323ef83b24) Thanks [@TimNooren](https://github.com/TimNooren)! - Add --x402-payment-signature flag for passing pre-signed x402 payment signatures
-
-## 1.5.1
-
-### Patch Changes
-
-- [#14](https://github.com/nansen-ai/nansen-cli/pull/14) [`bde43ae`](https://github.com/nansen-ai/nansen-cli/commit/bde43aedba6b5d113fe6da01e39744c0214704b3) Thanks [@TimNooren](https://github.com/TimNooren)! - Allow requests without an API key. Unauthenticated requests now reach the API and return x402 payment options instead of failing immediately.
-
-## 1.5.0
-
-### Minor Changes
-
-- [#12](https://github.com/nansen-ai/nansen-cli/pull/12) [`8c1d2d5`](https://github.com/nansen-ai/nansen-cli/commit/8c1d2d524f98b560f6f540c42a28579e1bfd3fc6) Thanks [@TimNooren](https://github.com/TimNooren)! - Add x402 payment required handling. HTTP 402 responses now return a `PAYMENT_REQUIRED` error code with decoded payment requirements (network, amount, asset, payTo) from the x402 protocol.
-
-## 1.4.0
-
-### Minor Changes
-
-- [`7dd9845`](https://github.com/nansen-ai/nansen-cli/commit/7dd984581e6d3babd16060aa344cdf8495c866e4) Thanks [@askeluv](https://github.com/askeluv)! - Add missing endpoints to align with Python SDK:
-
-  - token info: Get detailed token information
-  - perp screener: Screen perpetual futures contracts
-  - perp leaderboard: Perpetual futures PnL leaderboard
-  - points leaderboard: Nansen Points leaderboard
-
-- [`778fb71`](https://github.com/nansen-ai/nansen-cli/commit/778fb71ed56cf32c06376e5263af36c57c34a18b) Thanks [@askeluv](https://github.com/askeluv)! - Add subcommand-specific help and command aliases
-
-  - `nansen <command> <subcommand> --help` now shows detailed help including description, required/optional parameters with defaults, return fields, and working examples
-  - `nansen <command> --help` lists all available subcommands
-  - Added command aliases for faster typing: `tgm` (token), `sm` (smart-money), `prof` (profiler), `port` (portfolio)
-
-### Patch Changes
-
-- [#9](https://github.com/nansen-ai/nansen-cli/pull/9) [`3efc2ce`](https://github.com/nansen-ai/nansen-cli/commit/3efc2cef3322e192b02a6a4e8955e53f3c7c6ab4) Thanks [@0xlaveen](https://github.com/0xlaveen)! - fix: profiler pnl endpoint, token screener --search, help shows all subcommands
-
-  - `profiler pnl` now uses correct endpoint `/api/v1/profiler/address/pnl` (was using non-existent `/pnl-and-trade-performance`). Now supports `--date` and `--limit`.
-  - `token screener --search PEPE` now filters results by token symbol/name (client-side, API doesn't support server-side search)
-  - Help text updated to list all 33 subcommands (was showing only 16, hiding 17 commands)
-  - Schema updated with `search` option for screener and `date`/`days`/`limit` for profiler pnl
-
-## 1.3.3
-
-### Patch Changes
-
-- [`1c3857f`](https://github.com/nansen-ai/nansen-cli/commit/1c3857fd019703ff1b4620f7feed4152d3234a6a) Thanks [@askeluv](https://github.com/askeluv)! - Fix repository URL in package.json (nansen-ai → askeluv)
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [1.3.1] - 2026-02-16
+### Added
+- **Trading commands** — `quote` and `execute` for DEX swaps (EVM + Solana)
+- **Wallet management** — `wallet create`, `list`, `show`, `export`, `default`, `delete`
+- **Wallet send** — transfer tokens on EVM and Solana (`wallet send`)
+- **x402 auto-payment** — automatic payment via Base USDC or Solana SPL USDC
+- Explorer links in transaction output
+- `--dry-run` flag for `wallet send`
+- x402 low balance warning
+- AI Agent Access setup docs and improved onboarding flow
 
 ### Fixed
-
-- Profiler 404 errors on valid addresses
-- Schema field name mismatches
-- Invalid fields being sent to API
-- Smart Money filter now uses correct `include_smart_money_labels` parameter
-
-### Changed
-
-- Removed unsupported chains (zksync, unichain)
-
-### Added
-
-- SKILL.md for skills.sh discoverability
-- Automated versioning with changesets
-
-## [1.3.0] - 2026-02-06
-
-### Added
-
-- ASCII art welcome banner with "Surface The Signal" tagline
-- Index.js test coverage (now 100%)
+- Solana execute crash with OKX quotes
+- x402 auto-pay retry path (3 reference errors)
+- Gas estimation — use API `quote.gas` as floor
+- Pre-flight simulation moved after approval (industry standard)
+- EVM signing edge cases with pure JS ECDSA
+- Wallet send crashes on amount parsing and silent success
+- Solana confirmation and SPL token transfer account ordering
+- Suppress duplicate JSON output from quote/execute
+- Suppress approval warning for native ETH swaps
 
 ### Changed
+- Pricing clarity — from $0.01/call, min $0.05 balance
+- Consolidated crypto primitives into shared module
 
-- Improved test reliability with afterEach timer cleanup
-- Test coverage increased to 83% (325 tests)
-
-## [1.0.0] - 2026-01-31
+## [1.6.0] - 2026-02-14
 
 ### Added
+- `token indicators` endpoint
+- `profiler search` — general entity search command
+- `--x402-payment-signature` flag for pre-signed payment headers
+- `X-Client-Type` and `X-Client-Version` tracking headers on all API requests
 
-- Initial public release
-- **Smart Money** commands: `netflow`, `dex-trades`, `perp-trades`, `holdings`, `dcas`, `historical-holdings`
-- **Profiler** commands: `balance`, `labels`, `transactions`, `pnl`, `search`, `historical-balances`, `related-wallets`, `counterparties`, `pnl-summary`, `perp-positions`, `perp-trades`
-- **Token God Mode** commands: `screener`, `holders`, `flows`, `dex-trades`, `pnl`, `who-bought-sold`, `flow-intelligence`, `transfers`, `jup-dca`, `perp-trades`, `perp-positions`, `perp-pnl-leaderboard`
-- **Portfolio** commands: `defi`
-- Address validation for EVM, Solana, and Bitcoin formats
-- JSON output by default, `--pretty` flag for human-readable formatting
-- `--days` option for date range queries
-- `--symbol` option for perp endpoints
-- Support for 20+ blockchain networks
-- Comprehensive test suite (138 tests)
+### Fixed
+- Error JSON now outputs to stdout (not stderr) for consistent agent parsing
+- Config loading — environment variables correctly override file config
+
+## [1.5.1] - 2026-02-07
+
+### Added
+- Allow API requests without API key when using x402 payment flow
+
+## [1.5.0] - 2026-01-31
+
+_Baseline version. Changes above are relative to this release._

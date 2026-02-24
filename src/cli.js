@@ -7,7 +7,7 @@ import { NansenAPI, NansenError, ErrorCode, saveConfig, deleteConfig, getConfigF
 import { buildWalletCommands } from './wallet.js';
 import { buildTradingCommands } from './trading.js';
 import fs from 'fs';
-import { getUpdateNotification, scheduleUpdateCheck } from './update-check.js';
+import { getUpdateNotification, getUpgradeNotice, scheduleUpdateCheck } from './update-check.js';
 import { createRequire } from 'module';
 import * as readline from 'readline';
 
@@ -376,6 +376,19 @@ export function parseFields(fieldsOption) {
 }
 
 // Parse command line arguments
+/**
+ * Compare two semver strings. Returns 1 if a > b, -1 if a < b, 0 if equal.
+ */
+function compareSemver(a, b) {
+  const parse = v => v.replace(/^v/, '').split('.').map(Number);
+  const [aM, am, ap] = parse(a);
+  const [bM, bm, bp] = parse(b);
+  if (aM !== bM) return aM > bM ? 1 : -1;
+  if (am !== bm) return am > bm ? 1 : -1;
+  if (ap !== bp) return ap > bp ? 1 : -1;
+  return 0;
+}
+
 export function parseArgs(args) {
   const result = { _: [], flags: {}, options: {} };
   
@@ -855,6 +868,7 @@ COMMANDS:
   portfolio      Portfolio analytics (defi)
   perp           Perpetual futures analytics (screener, leaderboard)
   points         Nansen Points analytics (leaderboard)
+  changelog      Show what's new (use --since <version> to filter)
   help           Show this help message
 
 GLOBAL OPTIONS:
@@ -1023,6 +1037,41 @@ export function buildCommands(deps = {}) {
 
     'help': async (args, apiInstance, flags, options) => {
       log(HELP);
+    },
+
+    'changelog': async (args, apiInstance, flags, options) => {
+      const changelogPath = new URL('../CHANGELOG.md', import.meta.url).pathname;
+      let content;
+      try {
+        content = fs.readFileSync(changelogPath, 'utf8');
+      } catch {
+        errorOutput('CHANGELOG.md not found. Visit https://github.com/nansen-ai/nansen-cli/blob/main/CHANGELOG.md');
+        return;
+      }
+      const since = options.since;
+      if (since) {
+        // Show only entries from the given version onwards
+        const lines = content.split('\n');
+        const filtered = [];
+        let include = false;
+        for (const line of lines) {
+          // Match ## [x.y.z] headers
+          const match = line.match(/^## \[(\d+\.\d+\.\d+)\]/);
+          if (match) {
+            const ver = match[1];
+            // Compare: include versions >= since, stop at versions < since
+            if (compareSemver(ver, since) >= 0) {
+              include = true;
+            } else {
+              include = false;
+            }
+          }
+          if (include) filtered.push(line);
+        }
+        log(filtered.join('\n') || `No changelog entries found for versions >= ${since}`);
+      } else {
+        log(content);
+      }
     },
 
     'schema': async (args, apiInstance, flags, options) => {
@@ -1357,7 +1406,7 @@ export function buildCommands(deps = {}) {
 }
 
 // Commands that don't require API authentication
-export const NO_AUTH_COMMANDS = ['login', 'logout', 'help', 'schema', 'cache', 'wallet', 'quote', 'execute'];
+export const NO_AUTH_COMMANDS = ['login', 'logout', 'help', 'schema', 'cache', 'wallet', 'quote', 'execute', 'changelog'];
 
 // Command aliases for convenience
 export const COMMAND_ALIASES = {
@@ -1497,8 +1546,12 @@ export async function runCLI(rawArgs, deps = {}) {
 
   // Update check (read cached result + schedule background refresh)
   const updateNotification = getUpdateNotification(VERSION);
+  const upgradeNotice = getUpgradeNotice(VERSION);
   scheduleUpdateCheck();
-  const notify = () => { if (updateNotification) errorOutput(updateNotification); };
+  const notify = () => {
+    if (upgradeNotice) errorOutput(upgradeNotice);
+    if (updateNotification) errorOutput(updateNotification);
+  };
 
   const commands = { ...buildCommands(deps), ...buildWalletCommands(deps), ...buildTradingCommands(deps), ...commandOverrides };
 

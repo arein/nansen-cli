@@ -28,6 +28,41 @@ function isNewer(latest, current) {
   return lp > cp;
 }
 
+const LAST_VERSION_FILE = path.join(CONFIG_DIR, 'last-version.json');
+
+/**
+ * After an update, show a one-time "what's new" notice on the first run.
+ * Compares current version against the stored last-seen version.
+ * Returns a notice string or null. Writes current version to disk.
+ */
+export function getUpgradeNotice(currentVersion) {
+  try {
+    if (process.env.NO_UPDATE_NOTIFIER || process.env.CI) return null;
+
+    let previousVersion = null;
+    if (fs.existsSync(LAST_VERSION_FILE)) {
+      const raw = fs.readFileSync(LAST_VERSION_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      previousVersion = data.version;
+    }
+
+    // Always update the stored version
+    if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { mode: 0o700, recursive: true });
+    fs.writeFileSync(LAST_VERSION_FILE, JSON.stringify({ version: currentVersion }));
+
+    // If no previous version stored, this is a fresh install — no notice
+    if (!previousVersion) return null;
+
+    // If versions match, no update happened
+    if (previousVersion === currentVersion) return null;
+
+    // Version changed — show notice
+    return `\n  ✨ Updated to ${currentVersion} (was ${previousVersion}). Run \`nansen changelog --since ${previousVersion}\` for details.\n`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Read the cached check result and return a notification string (or null).
  */
