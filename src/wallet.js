@@ -760,14 +760,14 @@ export function buildWalletCommands(deps = {}) {
           try {
             const result = await sendTokens({
               to: options.to,
-              amount: options.amount,
+              amount: String(options.amount),
               chain: options.chain,
               token: options.token || null,
               wallet: options.wallet || null,
               password,
             });
             
-            return {
+            const output = {
               success: true,
               transactionHash: result.transactionHash,
               from: result.from,
@@ -776,6 +776,8 @@ export function buildWalletCommands(deps = {}) {
               token: result.token,
               chain: result.chain,
             };
+            log(JSON.stringify(output, null, 2));
+            return output;
           } catch (err) {
             log(JSON.stringify({ success: false, error: err.message }));
             exit(1);
