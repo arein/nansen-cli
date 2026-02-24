@@ -483,7 +483,7 @@ describe('sendTokens integration', () => {
     });
 
     test('propagates RPC errors', async () => {
-      fetch.mockImplementation(async () => ({ json: () => Promise.resolve({ error: { message: 'insufficient funds' } }) }));
+      fetch.mockImplementation(async () => ({ json: () => Promise.resolve({ error: { message: 'insufficient lamports on account' } }) }));
       await expect(sendTokens({ to: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4', amount: '1', chain: 'evm', password: 'test' })).rejects.toThrow('Insufficient SOL balance');
     });
 

@@ -320,6 +320,11 @@ function loadConfig() {
     config = { apiKey: null, baseUrl: 'https://api.nansen.ai' };
   }
 
+  // Ensure baseUrl default (config file from older versions may omit it)
+  if (!config.baseUrl) {
+    config.baseUrl = 'https://api.nansen.ai';
+  }
+
   // Env vars override individual fields
   if (process.env.NANSEN_API_KEY) {
     config.apiKey = process.env.NANSEN_API_KEY;
@@ -515,7 +520,7 @@ export class NansenAPI {
               }
             } catch { /* x402 auto-pay unavailable, fall through */ }
           }
-          message = 'Payment required. To access this endpoint:\n  • Set an API key: nansen login --api-key <key>  (get one at https://app.nansen.ai/api)\n  • Or pay per call: nansen wallet create, fund with USDC on Base or Solana ($0.05/call)\n  • Docs: https://docs.x402.org';
+          message = 'Payment required. To access this endpoint:\n  • Set an API key: nansen login --api-key <key>  (get one at https://app.nansen.ai/api)\n  • Or pay per call: nansen wallet create, fund with USDC on Base or Solana (min $0.05 per call)\n  • Docs: https://docs.x402.org';
           const paymentHeader = response.headers.get('payment-required');
           if (paymentHeader) {
             try {
