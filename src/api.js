@@ -493,7 +493,7 @@ export class NansenAPI {
           if (!this.defaultHeaders['Payment-Signature']) {
             try {
               const { createPaymentSignatures } = await import('./x402.js');
-              for await (const { signature } of createPaymentSignatures(response, url)) {
+              for await (const { signature, network } of createPaymentSignatures(response, url)) {
                 const paidResponse = await fetch(url, {
                   method: 'POST',
                   headers: {
@@ -507,13 +507,15 @@ export class NansenAPI {
                   body: JSON.stringify(NansenAPI.cleanBody(body)),
                 });
                 if (paidResponse.ok) {
+                  const chain = network.startsWith('solana:') ? 'Solana' : 'Base';
+                  console.error(`[x402] Paid $0.05 USDC via ${chain}`);
                   return await paidResponse.json();
                 }
                 // This payment option was rejected, try next
               }
             } catch { /* x402 auto-pay unavailable, fall through */ }
           }
-          message = 'Payment required (x402). Sign the paymentRequirements below per https://docs.x402.org and pass the result with --x402-payment-signature <value>.';
+          message = 'Payment required. To access this endpoint:\n  • Set an API key: nansen login --api-key <key>  (get one at https://app.nansen.ai/api)\n  • Or pay per call: nansen wallet create, fund with USDC on Base or Solana ($0.05/call)\n  • Docs: https://docs.x402.org';
           const paymentHeader = response.headers.get('payment-required');
           if (paymentHeader) {
             try {

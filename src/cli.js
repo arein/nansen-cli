@@ -973,10 +973,16 @@ export function buildCommands(deps = {}) {
 
   return {
     'login': async (args, apiInstance, flags, options) => {
-      log('Nansen CLI Login\n');
-      log('Get your API key at: https://app.nansen.ai/api\n');
-      
-      const apiKey = await promptFn('Enter your API key: ', true);
+      // Support non-interactive: nansen login --api-key <key>
+      let apiKey = options['api-key'] || options.apiKey;
+
+      if (!apiKey) {
+        log('Nansen CLI Login\n');
+        log('Get your API key at: https://app.nansen.ai/api\n');
+        log('Tip: For non-interactive use: nansen login --api-key <key>\n');
+        
+        apiKey = await promptFn('Enter your API key: ', true);
+      }
       
       if (!apiKey || apiKey.trim().length === 0) {
         log('\n❌ No API key provided');

@@ -620,6 +620,10 @@ export function buildWalletCommands(deps = {}) {
             log(`  Solana: ${result.solana}`);
             if (result.isDefault) log(`  ★ Set as default wallet`);
             log('');
+            log('  Fund this wallet to start making API calls or trading:');
+            log(`    Base:   send USDC to ${result.evm}`);
+            log(`    Solana: send USDC to ${result.solana}`);
+            log('');
             return result;
           } catch (err) {
             log(`❌ ${err.message}`);

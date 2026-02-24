@@ -96,8 +96,34 @@ async function rpcCall(url, method, params = []) {
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
   const data = await response.json();
-  if (data.error) throw new Error(`RPC error: ${data.error.message || JSON.stringify(data.error)}`);
+  if (data.error) throw new Error(friendlyRpcError(data.error));
   return data.result;
+}
+
+/**
+ * Convert raw RPC errors into actionable messages.
+ */
+function friendlyRpcError(error) {
+  const msg = error.message || JSON.stringify(error);
+  const lower = msg.toLowerCase();
+
+  if (lower.includes('no record of a prior credit') || lower.includes('accountnotfound')) {
+    return 'Insufficient SOL for transaction fees. Send at least 0.01 SOL to your wallet.';
+  }
+  if (lower.includes('insufficient lamports') || lower.includes('insufficient funds')) {
+    return 'Insufficient SOL balance for this transaction. Top up your wallet with SOL.';
+  }
+  if (lower.includes('blockhash not found') || lower.includes('blockhash')) {
+    return 'Transaction expired. Please try again.';
+  }
+  if (lower.includes('too large') || lower.includes('transaction too big')) {
+    return 'Transaction too large. Try a simpler transaction or fewer instructions.';
+  }
+  if (lower.includes('program failed') || lower.includes('custom program error')) {
+    return `Transaction rejected by on-chain program: ${msg}`;
+  }
+
+  return `RPC error: ${msg}`;
 }
 
 // ============= RLP Encoding =============
