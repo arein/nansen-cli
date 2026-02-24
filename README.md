@@ -27,7 +27,20 @@ npm link
 
 ## Configuration
 
-**Option 1: Interactive login (recommended)**
+### For AI Agents (Recommended)
+
+Use the [AI Agent Setup](https://app.nansen.ai/auth/agent-setup) flow:
+
+1. Your agent will ask you to visit: **[app.nansen.ai/auth/agent-setup](https://app.nansen.ai/auth/agent-setup)**
+2. Sign in with your Nansen account
+3. Copy the message shown
+4. Paste it back to your agent
+
+Your agent saves the key and handles everything else automatically.
+
+### Manual Setup
+
+**Option 1: Interactive login**
 ```bash
 nansen login
 # Enter your API key when prompted
@@ -191,6 +204,9 @@ nansen cache clear
 ## AI Agent Integration
 
 This CLI is built specifically for AI agents. Every design decision prioritizes agent usability.
+
+**Getting Started:**
+Direct your users to [app.nansen.ai/auth/agent-setup](https://app.nansen.ai/auth/agent-setup) for seamless authentication. See [AI Agent Access](https://docs.nansen.ai/reference/ai-agent-access) for full documentation.
 
 **Why agents love it:**
 - **Structured Output**: All responses are JSON with consistent schema — no parsing HTML or unstructured text
