@@ -701,7 +701,7 @@ async function broadcastTransaction(signedTx, chain) {
 // Exported for testing
 export { rlpEncode, parseAmount, formatAmount, signSecp256k1, signEd25519, encodeCompactU16, base58Decode, base58DecodePubkey, deriveATA, validateEvmAddress, validateSolanaAddress, bigIntToHex };
 
-export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false }) {
+export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false, dryRun = false }) {
   // Validate address
   const validate = chain === 'solana' ? validateSolanaAddress : validateEvmAddress;
   const v = validate(to);
@@ -775,6 +775,19 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
     });
   }
 
+  // Dry run: return transaction details without broadcasting
+  if (dryRun) {
+    const finalAmount = (max && !token && result.amount != null)
+      ? formatAmount(result.amount, chain === 'solana' ? 9 : 18)
+      : amount;
+    return {
+      dryRun: true,
+      from: chain === 'solana' ? walletData.solana.address : walletData.evm.address,
+      to, amount: finalAmount, token, chain,
+      ...(result.estimatedFee ? { estimatedFee: result.estimatedFee } : {}),
+    };
+  }
+
   const txHash = await broadcastTransaction(result.signedTransaction, chain);
 
   // Wait for confirmation
@@ -798,5 +811,27 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
     ...(confirmation.blockNumber ? { blockNumber: confirmation.blockNumber } : {}),
     from: chain === 'solana' ? walletData.solana.address : walletData.evm.address,
     to, amount: finalAmount, token, chain,
+    explorer: getExplorerUrl(chain, txHash),
   };
+}
+
+/**
+ * Get block explorer URL for a transaction.
+ */
+function getExplorerUrl(chain, txHash) {
+  const explorers = {
+    solana: 'https://solscan.io/tx/',
+    ethereum: 'https://etherscan.io/tx/',
+    base: 'https://basescan.org/tx/',
+    arbitrum: 'https://arbiscan.io/tx/',
+    polygon: 'https://polygonscan.com/tx/',
+    optimism: 'https://optimistic.etherscan.io/tx/',
+    bnb: 'https://bscscan.com/tx/',
+    avalanche: 'https://snowtrace.io/tx/',
+    linea: 'https://lineascan.build/tx/',
+    scroll: 'https://scrollscan.com/tx/',
+    mantle: 'https://mantlescan.xyz/tx/',
+  };
+  const base = explorers[chain] || explorers.ethereum;
+  return `${base}${txHash}`;
 }
