@@ -96,8 +96,34 @@ async function rpcCall(url, method, params = []) {
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
   const data = await response.json();
-  if (data.error) throw new Error(`RPC error: ${data.error.message || JSON.stringify(data.error)}`);
+  if (data.error) throw new Error(friendlyRpcError(data.error));
   return data.result;
+}
+
+/**
+ * Convert raw RPC errors into actionable messages.
+ */
+function friendlyRpcError(error) {
+  const msg = error.message || JSON.stringify(error);
+  const lower = msg.toLowerCase();
+
+  if (lower.includes('no record of a prior credit') || lower.includes('accountnotfound')) {
+    return 'Insufficient SOL for transaction fees. Send at least 0.01 SOL to your wallet.';
+  }
+  if (lower.includes('insufficient lamports') || lower.includes('insufficient funds')) {
+    return 'Insufficient SOL balance for this transaction. Top up your wallet with SOL.';
+  }
+  if (lower.includes('blockhash not found') || lower.includes('blockhash')) {
+    return 'Transaction expired. Please try again.';
+  }
+  if (lower.includes('too large') || lower.includes('transaction too big')) {
+    return 'Transaction too large. Try a simpler transaction or fewer instructions.';
+  }
+  if (lower.includes('program failed') || lower.includes('custom program error')) {
+    return `Transaction rejected by on-chain program: ${msg}`;
+  }
+
+  return `RPC error: ${msg}`;
 }
 
 // ============= RLP Encoding =============
@@ -675,7 +701,7 @@ async function broadcastTransaction(signedTx, chain) {
 // Exported for testing
 export { rlpEncode, parseAmount, formatAmount, signSecp256k1, signEd25519, encodeCompactU16, base58Decode, base58DecodePubkey, deriveATA, validateEvmAddress, validateSolanaAddress, bigIntToHex };
 
-export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false }) {
+export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false, dryRun = false }) {
   // Validate address
   const validate = chain === 'solana' ? validateSolanaAddress : validateEvmAddress;
   const v = validate(to);
@@ -749,6 +775,19 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
     });
   }
 
+  // Dry run: return transaction details without broadcasting
+  if (dryRun) {
+    const finalAmount = (max && !token && result.amount != null)
+      ? formatAmount(result.amount, chain === 'solana' ? 9 : 18)
+      : amount;
+    return {
+      dryRun: true,
+      from: chain === 'solana' ? walletData.solana.address : walletData.evm.address,
+      to, amount: finalAmount, token, chain,
+      ...(result.estimatedFee ? { estimatedFee: result.estimatedFee } : {}),
+    };
+  }
+
   const txHash = await broadcastTransaction(result.signedTransaction, chain);
 
   // Wait for confirmation
@@ -772,5 +811,27 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
     ...(confirmation.blockNumber ? { blockNumber: confirmation.blockNumber } : {}),
     from: chain === 'solana' ? walletData.solana.address : walletData.evm.address,
     to, amount: finalAmount, token, chain,
+    explorer: getExplorerUrl(chain, txHash),
   };
+}
+
+/**
+ * Get block explorer URL for a transaction.
+ */
+function getExplorerUrl(chain, txHash) {
+  const explorers = {
+    solana: 'https://solscan.io/tx/',
+    ethereum: 'https://etherscan.io/tx/',
+    base: 'https://basescan.org/tx/',
+    arbitrum: 'https://arbiscan.io/tx/',
+    polygon: 'https://polygonscan.com/tx/',
+    optimism: 'https://optimistic.etherscan.io/tx/',
+    bnb: 'https://bscscan.com/tx/',
+    avalanche: 'https://snowtrace.io/tx/',
+    linea: 'https://lineascan.build/tx/',
+    scroll: 'https://scrollscan.com/tx/',
+    mantle: 'https://mantlescan.xyz/tx/',
+  };
+  const base = explorers[chain] || explorers.ethereum;
+  return `${base}${txHash}`;
 }

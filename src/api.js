@@ -320,6 +320,11 @@ function loadConfig() {
     config = { apiKey: null, baseUrl: 'https://api.nansen.ai' };
   }
 
+  // Ensure baseUrl default (config file from older versions may omit it)
+  if (!config.baseUrl) {
+    config.baseUrl = 'https://api.nansen.ai';
+  }
+
   // Env vars override individual fields
   if (process.env.NANSEN_API_KEY) {
     config.apiKey = process.env.NANSEN_API_KEY;
@@ -493,7 +498,7 @@ export class NansenAPI {
           if (!this.defaultHeaders['Payment-Signature']) {
             try {
               const { createPaymentSignatures } = await import('./x402.js');
-              for await (const { signature } of createPaymentSignatures(response, url)) {
+              for await (const { signature, network } of createPaymentSignatures(response, url)) {
                 const paidResponse = await fetch(url, {
                   method: 'POST',
                   headers: {
@@ -507,13 +512,23 @@ export class NansenAPI {
                   body: JSON.stringify(NansenAPI.cleanBody(body)),
                 });
                 if (paidResponse.ok) {
+                  const chain = network.startsWith('solana:') ? 'Solana' : 'Base';
+                  console.error(`[x402] Paid via ${chain} USDC`);
+                  // Check remaining balance and warn if low
+                  try {
+                    const { checkX402Balance } = await import('./x402.js');
+                    const balance = await checkX402Balance(network);
+                    if (balance !== null && balance < 0.25) {
+                      console.error(`[x402] Warning: USDC balance low ($${balance.toFixed(2)}). Fund your wallet to avoid interruptions.`);
+                    }
+                  } catch { /* balance check is best-effort */ }
                   return await paidResponse.json();
                 }
                 // This payment option was rejected, try next
               }
             } catch { /* x402 auto-pay unavailable, fall through */ }
           }
-          message = 'Payment required (x402). Sign the paymentRequirements below per https://docs.x402.org and pass the result with --x402-payment-signature <value>.';
+          message = 'Payment required. To access this endpoint:\n  • Set an API key: nansen login --api-key <key>  (get one at https://app.nansen.ai/api)\n  • Or pay per call: nansen wallet create, fund with USDC on Base or Solana (from $0.01/call, min $0.05 balance)\n  • Docs: https://docs.x402.org';
           const paymentHeader = response.headers.get('payment-required');
           if (paymentHeader) {
             try {

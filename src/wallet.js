@@ -620,6 +620,10 @@ export function buildWalletCommands(deps = {}) {
             log(`  Solana: ${result.solana}`);
             if (result.isDefault) log(`  ★ Set as default wallet`);
             log('');
+            log('  Fund this wallet to start making API calls or trading:');
+            log(`    Base (recommended, lower fees): send USDC to ${result.evm}`);
+            log(`    Solana: send USDC to ${result.solana}`);
+            log('');
             return result;
           } catch (err) {
             log(`❌ ${err.message}`);
@@ -757,9 +761,10 @@ export function buildWalletCommands(deps = {}) {
           }
           
           const password = process.env.NANSEN_WALLET_PASSWORD || await promptPassword('Enter wallet password: ', deps);
+          const dryRun = flags['dry-run'] || flags.dryRun;
           
           try {
-            const result = await sendTokens({
+            const sendOpts = {
               to: options.to,
               amount: isMax ? '0' : String(options.amount),
               chain: options.chain,
@@ -767,7 +772,26 @@ export function buildWalletCommands(deps = {}) {
               wallet: options.wallet || null,
               max: isMax,
               password,
-            });
+              dryRun,
+            };
+
+            if (dryRun) {
+              // Build the transaction but don't broadcast
+              const result = await sendTokens(sendOpts);
+              const output = {
+                dryRun: true,
+                from: result.from,
+                to: options.to,
+                amount: result.amount || (isMax ? 'max' : String(options.amount)),
+                token: options.token || '(native)',
+                chain: options.chain,
+                ...(result.estimatedFee ? { estimatedFee: result.estimatedFee } : {}),
+              };
+              log(JSON.stringify(output, null, 2));
+              return output;
+            }
+
+            const result = await sendTokens(sendOpts);
             
             const output = {
               success: true,
@@ -779,6 +803,7 @@ export function buildWalletCommands(deps = {}) {
               amount: result.amount,
               token: result.token,
               chain: result.chain,
+              explorer: result.explorer,
             };
             log(JSON.stringify(output, null, 2));
             return output;
@@ -802,8 +827,8 @@ COMMANDS:
   export <name>              Export private keys (requires password)
   default <name>             Set the default wallet
   delete <name>              Delete a wallet (requires password)
-  send --to <address> --amount <number> --chain <evm|solana> [--token <address>] [--wallet <name>] [--max]
-                             Send tokens or native currency (--max sends entire balance)
+  send --to <address> --amount <number> --chain <evm|solana> [--token <address>] [--wallet <name>] [--max] [--dry-run]
+                             Send tokens or native currency (--max sends entire balance, --dry-run previews without sending)
 
 OPTIONS:
   --name <label>             Wallet name (default: "default")

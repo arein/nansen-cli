@@ -147,3 +147,59 @@ export async function createPaymentSignature(response, url, options = {}) {
   }
   return null;
 }
+
+/**
+ * Check USDC balance for x402 payment wallet.
+ * Returns balance in USD (number) or null if check fails.
+ */
+export async function checkX402Balance(network) {
+  try {
+    const { listWallets, exportWallet } = await import('./wallet.js');
+    const wallets = listWallets();
+    if (!wallets.defaultWallet) return null;
+
+    // Find wallet addresses without needing password
+    const walletInfo = wallets.wallets.find(w => w.name === wallets.defaultWallet);
+    if (!walletInfo) return null;
+
+    if (network.startsWith('solana:')) {
+      const { getSolanaRpcUrl } = await import('./x402-svm.js');
+      const rpcUrl = getSolanaRpcUrl(network);
+      const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+      const resp = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'getTokenAccountsByOwner',
+          params: [walletInfo.solana, { mint: USDC_MINT }, { encoding: 'jsonParsed' }],
+        }),
+      });
+      const data = await resp.json();
+      const accounts = data.result?.value || [];
+      if (accounts.length === 0) return 0;
+      return parseFloat(accounts[0].account.data.parsed.info.tokenAmount.uiAmountString || '0');
+    }
+
+    if (network.startsWith('eip155:')) {
+      // Base USDC balance check
+      const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+      const addr = walletInfo.evm.replace('0x', '').toLowerCase().padStart(64, '0');
+      const resp = await fetch('https://mainnet.base.org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'eth_call',
+          params: [{ to: USDC_BASE, data: `0x70a08231${addr}` }, 'latest'],
+        }),
+      });
+      const data = await resp.json();
+      return parseInt(data.result, 16) / 1e6;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
