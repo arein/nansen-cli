@@ -490,21 +490,23 @@ export class NansenAPI {
           message = message.replace(/\.+$/, '') + '. No retry will help. Check your Nansen dashboard for credit balance.';
         } else if (code === ErrorCode.PAYMENT_REQUIRED) {
           // Try x402 auto-payment if wallet exists and no signature already provided
-          if (!defaultHeaders['Payment-Signature']) {
+          if (!this.defaultHeaders['Payment-Signature']) {
             try {
               const { createPaymentSignature } = await import('./x402.js');
               const paymentSig = await createPaymentSignature(response, url);
               if (paymentSig) {
                 // Retry request with payment signature
                 const paidResponse = await fetch(url, {
-                  method,
+                  method: 'POST',
                   headers: {
-                    ...headers,
                     'Content-Type': 'application/json',
+                    'X-Client-Type': 'nansen-cli',
+                    'X-Client-Version': packageVersion,
                     'Payment-Signature': paymentSig,
-                    ...defaultHeaders,
+                    ...this.defaultHeaders,
+                    ...options.headers,
                   },
-                  body: body ? JSON.stringify(NansenAPI.cleanBody(body)) : undefined,
+                  body: JSON.stringify(NansenAPI.cleanBody(body)),
                 });
                 if (paidResponse.ok) {
                   return await paidResponse.json();
