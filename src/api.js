@@ -489,6 +489,30 @@ export class NansenAPI {
         } else if (code === ErrorCode.CREDITS_EXHAUSTED) {
           message = message.replace(/\.+$/, '') + '. No retry will help. Check your Nansen dashboard for credit balance.';
         } else if (code === ErrorCode.PAYMENT_REQUIRED) {
+          // Try x402 auto-payment if wallet exists and no signature already provided
+          if (!defaultHeaders['Payment-Signature']) {
+            try {
+              const { createPaymentSignature } = await import('./x402.js');
+              const paymentSig = await createPaymentSignature(response, url);
+              if (paymentSig) {
+                // Retry request with payment signature
+                const paidResponse = await fetch(url, {
+                  method,
+                  headers: {
+                    ...headers,
+                    'Content-Type': 'application/json',
+                    'Payment-Signature': paymentSig,
+                    ...defaultHeaders,
+                  },
+                  body: body ? JSON.stringify(NansenAPI.cleanBody(body)) : undefined,
+                });
+                if (paidResponse.ok) {
+                  return await paidResponse.json();
+                }
+                // Payment failed — fall through to normal error handling
+              }
+            } catch { /* x402 auto-pay unavailable, fall through */ }
+          }
           message = 'Payment required (x402). Sign the paymentRequirements below per https://docs.x402.org and pass the result with --x402-payment-signature <value>.';
           const paymentHeader = response.headers.get('payment-required');
           if (paymentHeader) {

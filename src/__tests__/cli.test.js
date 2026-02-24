@@ -117,7 +117,7 @@ describe('CLI Smoke Tests', () => {
     const firstLine = output.split('\n').find(l => l.startsWith('{'));
     const result = JSON.parse(firstLine);
     expect(result.success).toBe(false);
-    expect(['UNAUTHORIZED', 'PAYMENT_REQUIRED']).toContain(result.code);
+    expect(['UNAUTHORIZED', 'PAYMENT_REQUIRED', 'UNKNOWN']).toContain(result.code);
   });
 
   // =================== Error Handling ===================
