@@ -498,6 +498,17 @@ describe('buildCommands', () => {
       );
     });
 
+    it('should call ohlcv with token address and timeframe', async () => {
+      const mockApi = {
+        tokenOhlcv: vi.fn().mockResolvedValue({ candles: [] })
+      };
+      await commands['token'](['ohlcv'], mockApi, {}, { token: '0xabc', chain: 'solana', timeframe: '4h' });
+
+      expect(mockApi.tokenOhlcv).toHaveBeenCalledWith(
+        expect.objectContaining({ tokenAddress: '0xabc', chain: 'solana', timeframe: '4h' })
+      );
+    });
+
     it('should pass days to flows handler', async () => {
       const mockApi = {
         tokenFlows: vi.fn().mockResolvedValue({ data: [] })

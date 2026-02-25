@@ -153,6 +153,11 @@ const MOCK_RESPONSES = {
       { indicator_type: 'price-momentum', score: 'bullish', signal: 0.75, signal_percentile: 85.5, last_trigger_on: '2025-01-10' }
     ]
   },
+  tokenOhlcv: {
+    candles: [
+      { timestamp: '2025-01-15T00:00:00Z', open: 1.5, high: 1.8, low: 1.4, close: 1.7, volume: 1000000 }
+    ]
+  },
   // New Token God Mode endpoints
   tokenFlowIntelligence: {
     flows: [
@@ -792,15 +797,36 @@ describe('NansenAPI', () => {
       });
     });
 
+    describe('tokenOhlcv', () => {
+      it('should fetch OHLCV data with correct endpoint and body', async () => {
+        setupMock(MOCK_RESPONSES.tokenOhlcv);
+
+        const result = await api.tokenOhlcv({
+          tokenAddress: TEST_DATA.solana.token,
+          chain: 'solana',
+          timeframe: '1h'
+        });
+
+        const body = expectFetchCalledWith('/api/v1/tgm/token-ohlcv');
+        if (body) {
+          expect(body.token_address).toBe(TEST_DATA.solana.token);
+          expect(body.chain).toBe('solana');
+          expect(body.timeframe).toBe('1h');
+        }
+
+        expect(result.candles).toBeInstanceOf(Array);
+      });
+    });
+
     describe('tokenScreener', () => {
       it('should screen tokens with correct endpoint and body', async () => {
         setupMock(MOCK_RESPONSES.tokenScreener);
-        
+
         const result = await api.tokenScreener({
           chains: ['solana'],
           timeframe: '24h'
         });
-        
+
         const body = expectFetchCalledWith('/api/v1/token-screener');
         expect(body.chains).toEqual(['solana']);
         expect(body.timeframe).toBe('24h');

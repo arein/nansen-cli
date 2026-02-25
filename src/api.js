@@ -998,6 +998,20 @@ export class NansenAPI {
     });
   }
 
+  async tokenOhlcv(params = {}) {
+    const { tokenAddress, chain = 'solana', timeframe, pagination } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new NansenError(validation.error, validation.code);
+    }
+    return this.request('/api/v1/tgm/token-ohlcv', {
+      token_address: tokenAddress,
+      chain,
+      timeframe,
+      pagination
+    });
+  }
+
   async tokenInformation(params = {}) {
     const { tokenAddress, chain = 'solana', timeframe = '1d' } = params;
     if (tokenAddress) {

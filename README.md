@@ -156,6 +156,7 @@ ENS names are automatically resolved to `0x` addresses via public APIs (with onc
 | `flow-intelligence` | Detailed flow intelligence by label |
 | `transfers` | Token transfer history |
 | `jup-dca` | Jupiter DCA orders for token |
+| `ohlcv` | OHLCV candle data for a token |
 | `perp-trades` | Perp trades by token symbol |
 | `perp-positions` | Open perp positions by token symbol |
 | `perp-pnl-leaderboard` | Perp PnL leaderboard by token |

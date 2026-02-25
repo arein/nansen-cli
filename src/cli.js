@@ -88,6 +88,7 @@ export const SCHEMA = {
           description: 'Token God Mode - deep analytics for any token',
           subcommands: {
             'indicators': { description: 'Risk and reward indicators for a token (Nansen Score)', options: { token: { type: 'string', required: true, description: 'Token address' }, chain: { type: 'string', default: 'ethereum' } }, returns: ['token_info[market_cap_usd, market_cap_group, is_stablecoin]', 'risk_indicators[indicator_type, score, signal, signal_percentile, last_trigger_on]', 'reward_indicators[indicator_type, score, signal, signal_percentile, last_trigger_on]'] },
+            'ohlcv': { description: 'OHLCV candle data for a token', options: { token: { type: 'string', required: true, description: 'Token address' }, chain: { type: 'string', default: 'solana' }, timeframe: { type: 'string', description: 'Candle timeframe (e.g., 1h, 4h, 1d)' }, limit: { type: 'number' } }, returns: ['timestamp', 'open', 'high', 'low', 'close', 'volume'] },
             'info': { description: 'Get detailed information for a specific token', options: { token: { type: 'string', required: true, description: 'Token address' }, chain: { type: 'string', default: 'solana' }, timeframe: { type: 'string', default: '1d', enum: ['5m', '1h', '6h', '12h', '1d', '7d'] } }, returns: ['token_address', 'token_symbol', 'token_name', 'chain', 'price_usd', 'volume_usd', 'market_cap', 'holder_count', 'liquidity_usd'] },
             'screener': { description: 'Discover and filter tokens', options: { chain: { type: 'string', default: 'solana' }, chains: { type: 'array' }, timeframe: { type: 'string', default: '24h', enum: ['5m', '10m', '1h', '6h', '24h', '7d', '30d'] }, 'smart-money': { type: 'boolean', description: 'Filter for Smart Money only' }, search: { type: 'string', description: 'Filter results by token symbol or name (client-side)' }, limit: { type: 'number' }, sort: { type: 'string' } }, returns: ['token_address', 'token_symbol', 'token_name', 'chain', 'price_usd', 'volume_usd', 'market_cap', 'holder_count', 'smart_money_holders'] },
             'holders': { description: 'Token holder analysis', options: { token: { type: 'string', required: true }, chain: { type: 'string', default: 'solana' }, 'smart-money': { type: 'boolean' }, limit: { type: 'number' } }, returns: ['address', 'address_label', 'token_amount', 'total_outflow', 'total_inflow', 'balance_change_24h', 'balance_change_7d', 'balance_change_30d', 'ownership_percentage', 'value_usd'] },
@@ -1133,6 +1134,7 @@ export function buildCommands(deps = {}) {
 
       const handlers = {
         'indicators': () => apiInstance.tokenIndicators({ tokenAddress, chain }),
+        'ohlcv': () => apiInstance.tokenOhlcv({ tokenAddress, chain, timeframe: options.timeframe, pagination }),
         'info': () => apiInstance.tokenInformation({ tokenAddress, chain, timeframe: options.timeframe }),
         'screener': async () => {
           const search = options.search;
@@ -1181,7 +1183,7 @@ export function buildCommands(deps = {}) {
         'perp-positions': () => apiInstance.tokenPerpPositions({ tokenSymbol, filters, orderBy, pagination }),
         'perp-pnl-leaderboard': () => apiInstance.tokenPerpPnlLeaderboard({ tokenSymbol, filters, orderBy, pagination, days }),
         'help': () => ({
-          commands: ['info', 'screener', 'holders', 'flows', 'dex-trades', 'pnl', 'who-bought-sold', 'flow-intelligence', 'transfers', 'jup-dca', 'perp-trades', 'perp-positions', 'perp-pnl-leaderboard'],
+          commands: ['info', 'ohlcv', 'screener', 'holders', 'flows', 'dex-trades', 'pnl', 'who-bought-sold', 'flow-intelligence', 'transfers', 'jup-dca', 'perp-trades', 'perp-positions', 'perp-pnl-leaderboard'],
           description: 'Token God Mode endpoints',
           example: 'nansen token screener --chain solana --timeframe 24h --smart-money'
         })

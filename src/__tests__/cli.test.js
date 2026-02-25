@@ -102,6 +102,7 @@ describe('CLI Smoke Tests', () => {
   it('should route research token commands', () => {
     const { stdout } = runCLI('research token help');
     expect(stdout).toContain('screener');
+    expect(stdout).toContain('ohlcv');
   });
 
   it('should still route deprecated smart-money path', () => {
