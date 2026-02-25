@@ -1,0 +1,69 @@
+name: Claude Code PR Review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude-review:
+    # Run on PR events, or on @claude mentions in comments
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          timeout_minutes: 10
+          direct_prompt: |
+            Review this PR for nansen-cli, a Node.js CLI for the Nansen API.
+            
+            **Project Rules:**
+            - ES modules only (import/export, never require)
+            - All CLI output must be structured JSON
+            - Zero external dependencies (only Node.js built-ins + vitest)
+            
+            **Check for:**
+            1. Code correctness and bugs
+            2. Error handling with proper codes (UNAUTHORIZED, RATE_LIMITED, etc.)
+            3. Address validation (EVM 0x... / Solana Base58)
+            4. Test coverage (api.test.js, cli.test.js, coverage.test.js)
+            5. README.md updates for user-facing changes
+            6. Changeset file for publishable changes
+            
+            **Effort Assessment:**
+            - Level 1: Minimal (typos, docs, config)
+            - Level 2: Moderate (bug fixes, small features)
+            - Level 3: Significant (new endpoints, refactoring)
+            - Level 4+: Major changes
+            
+            Provide:
+            1. Brief summary
+            2. <details><summary>Detailed Review</summary>File-by-file analysis</details>
+            3. **Effort Assessment:** Level X
+            4. **Recommendation:** APPROVE or REQUEST CHANGES
