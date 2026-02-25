@@ -42,7 +42,7 @@ jobs:
           timeout_minutes: 10
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
             
             Review this PR for nansen-cli (Node.js CLI for Nansen API). Be thorough but fair.
             
@@ -59,12 +59,12 @@ jobs:
             **Anti-patterns:** Silent catch blocks, console.log (use JSON), unhandled promises, loose equality (==)
             
             **Instructions:**
-            1. Review the PR diff using `gh pr diff ${{ github.event.pull_request.number }}`
+            1. Review the PR diff using `gh pr diff ${{ github.event.pull_request.number || github.event.issue.number }}`
             2. **Post findings as INLINE comments** on specific lines using the inline comment tool - one comment per issue, placed directly on the relevant line
             3. Post a brief top-level summary (2-3 sentences max) with: verdict + effort level (1-4)
             4. **Submit your verdict:**
-               - If ANY 🔴 blocking issues: `gh pr review ${{ github.event.pull_request.number }} --request-changes -b "See inline comments"`
-               - If NO 🔴 issues: `gh pr review ${{ github.event.pull_request.number }} --approve -b "LGTM"`
+               - If ANY 🔴 blocking issues: `gh pr review ${{ github.event.pull_request.number || github.event.issue.number }} --request-changes -b "See inline comments"`
+               - If NO 🔴 issues: `gh pr review ${{ github.event.pull_request.number || github.event.issue.number }} --approve -b "LGTM"`
             
             DO NOT list line-by-line findings in the summary comment. Use inline comments instead.
           
