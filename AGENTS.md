@@ -135,7 +135,7 @@ describe('featureName', () => {
 - [ ] CLI help text updated if adding/changing commands
 - [ ] RPC mocks cover all methods in the code path
 - [ ] Wallet flows work both with and without `NANSEN_WALLET_PASSWORD`
-- [ ] Changeset added if changing behavior (`npx changeset add`)
+- [ ] Changeset added if changing user-facing behavior (add a `.changeset/<name>.md` file — `npm test` will warn if missing)
 
 ## Chains & Networks
 
