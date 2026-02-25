@@ -1010,7 +1010,8 @@ export function buildCommands(deps = {}) {
     saveConfigFn = saveConfig,
     deleteConfigFn = deleteConfig,
     getConfigFileFn = getConfigFile,
-    exit = process.exit
+    exit = process.exit,
+    isTTY = process.stdin.isTTY
   } = deps;
 
   return {
@@ -1019,39 +1020,38 @@ export function buildCommands(deps = {}) {
       let apiKey = options['api-key'] || options.apiKey;
 
       if (!apiKey) {
-        log('Nansen CLI Login\n');
-        log('Get your API key at: https://app.nansen.ai/api\n');
-        log('Tip: For non-interactive use: nansen login --api-key <key>\n');
-        
-        apiKey = await promptFn('Enter your API key: ', true);
+        if (!isTTY) {
+          // Non-interactive mode: check env var fallback
+          apiKey = process.env.NANSEN_API_KEY;
+          if (!apiKey) {
+            log('❌ No API key provided. Use: nansen login --api-key <key>\n   Or set NANSEN_API_KEY environment variable.');
+            exit(1);
+            return;
+          }
+        } else {
+          log('Nansen CLI Login\n');
+          log('Get your API key at: https://app.nansen.ai/api\n');
+          log('Tip: For non-interactive use: nansen login --api-key <key>\n');
+
+          apiKey = await promptFn('Enter your API key: ', true);
+        }
       }
-      
+
       if (!apiKey || apiKey.trim().length === 0) {
         log('\n❌ No API key provided');
         exit(1);
         return;
       }
-      
-      // Validate the key with a test request
-      log('\nValidating API key...');
-      try {
-        const testApi = new NansenAPIClass(apiKey.trim());
-        await testApi.tokenScreener({ chains: ['solana'], pagination: { page: 1, per_page: 1 } });
-        
-        // Save the config
-        saveConfigFn({ 
-          apiKey: apiKey.trim(), 
-          baseUrl: 'https://api.nansen.ai' 
-        });
-        
-        log('✓ API key validated');
-        log(`✓ Saved to ${getConfigFileFn()}\n`);
-        log('You can now use the Nansen CLI. Try:');
-        log('  nansen token screener --chain solana --pretty');
-      } catch (error) {
-        log(`\n❌ Invalid API key: ${error.message}`);
-        exit(1);
-      }
+
+      // Save the config without validation
+      saveConfigFn({
+        apiKey: apiKey.trim(),
+        baseUrl: 'https://api.nansen.ai'
+      });
+
+      log(`✓ Saved to ${getConfigFileFn()}\n`);
+      log('You can now use the Nansen CLI. Try:');
+      log('  nansen token screener --chain solana --pretty');
     },
 
     'logout': async (args, apiInstance, flags, options) => {
