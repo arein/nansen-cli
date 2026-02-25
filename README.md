@@ -111,6 +111,16 @@ Track trading and holding activity of sophisticated market participants.
 
 ### `profiler` - Wallet Profiling
 
+**ENS Name Resolution:** You can use `.eth` names anywhere an `--address` is accepted:
+
+```bash
+nansen profiler balance --address vitalik.eth
+nansen profiler labels --address nansen.eth --chain ethereum
+nansen profiler transactions --address vitalik.eth --table
+```
+
+ENS names are automatically resolved to `0x` addresses via public APIs (with onchain RPC fallback). Works on all EVM chains. The resolved name and address are included as `_ens` metadata in JSON output.
+
 | Subcommand | Description |
 |------------|-------------|
 | `balance` | Current token holdings |
