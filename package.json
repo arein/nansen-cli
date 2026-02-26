@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
+    "pretest": "node scripts/check-changeset.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
