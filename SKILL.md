@@ -153,9 +153,9 @@ Two-step: quote then execute.
 ```bash
 # Get quotes from multiple aggregators (Jupiter, OKX, LiFi)
 nansen trade quote --chain solana \
-  --from So11111111111111111111111111111111111111112 \
-  --to EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v \
-  --amount 1000000000
+  --from <from_token_address> \
+  --to <to_token_address> \
+  --amount <base_units>
 
 # Execute the best quote
 nansen trade execute --quote <quote-id>
@@ -209,11 +209,10 @@ nansen wallet send --to <addr> --chain evm --max            # Send entire balanc
 
 ## Schema Introspection
 
-> **Stuck?** Run `nansen schema` or `nansen schema <command> --pretty` to discover all available commands, options, and return fields.
+> **Stuck?** Run `nansen schema` or `nansen schema <command>` to discover all available commands, options, and return fields.
 
 ```bash
 nansen schema                 # Full JSON schema — all commands, options, return fields
-nansen schema --pretty
 ```
 
 ## Supported Chains
