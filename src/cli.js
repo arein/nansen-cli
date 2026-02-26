@@ -1134,7 +1134,7 @@ export function buildCommands(deps = {}) {
 
       const handlers = {
         'indicators': () => apiInstance.tokenIndicators({ tokenAddress, chain }),
-        'ohlcv': () => apiInstance.tokenOhlcv({ tokenAddress, chain, timeframe: options.timeframe, pagination }),
+        'ohlcv': () => apiInstance.tokenOhlcv({ tokenAddress, chain, timeframe: options.timeframe || '1d', pagination }),
         'info': () => apiInstance.tokenInformation({ tokenAddress, chain, timeframe: options.timeframe }),
         'screener': async () => {
           const search = options.search;
