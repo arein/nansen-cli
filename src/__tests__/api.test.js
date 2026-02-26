@@ -1930,9 +1930,9 @@ describe('NansenAPI', () => {
 
       const autoPayApi = new NansenAPI('test-key', 'https://api.nansen.ai');
 
-      // Mock the dynamic import of x402.js
-      const originalImport = vi.fn();
+      // Mock the dynamic import — resetModules ensures fresh resolution
       const mockHandleX402Payment = vi.fn().mockResolvedValue('mock-payment-sig');
+      vi.resetModules();
       vi.doMock('../walletconnect-x402.js', () => ({ handleX402Payment: mockHandleX402Payment }));
 
       const result = await autoPayApi.smartMoneyNetflow({});
@@ -2003,7 +2003,8 @@ describe('NansenAPI', () => {
 
       mockFetch.mockResolvedValueOnce(errorResponse);
 
-      // Mock x402 to throw
+      // Mock x402 to throw — resetModules ensures fresh resolution
+      vi.resetModules();
       vi.doMock('../walletconnect-x402.js', () => ({
         handleX402Payment: vi.fn().mockRejectedValue(new Error('No wallet connected')),
       }));

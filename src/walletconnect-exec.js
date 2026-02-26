@@ -7,9 +7,9 @@
 import { execFile } from 'child_process';
 
 /**
- * Execute a CLI command and return stdout.
+ * Execute a walletconnect CLI command and return stdout.
  */
-export function exec(cmd, args, timeoutMs = 10000) {
+export function wcExec(cmd, args, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: timeoutMs }, (err, stdout, stderr) => {
       if (err) {

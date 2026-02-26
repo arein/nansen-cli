@@ -7,22 +7,8 @@
 
 import crypto from 'crypto';
 import { NansenError, ErrorCode } from './api.js';
-import { exec } from './walletconnect-exec.js';
-
-// Chain name → EIP-155 chain ID mapping
-const CHAIN_IDS = {
-  ethereum: 1,
-  base: 8453,
-  optimism: 10,
-  arbitrum: 42161,
-  polygon: 137,
-  avalanche: 43114,
-  bnb: 56,
-  linea: 59144,
-  scroll: 534352,
-  zksync: 324,
-  mantle: 5000,
-};
+import { wcExec } from './walletconnect-exec.js';
+import { EVM_CHAIN_IDS } from './chain-ids.js';
 
 /**
  * Check if a WalletConnect wallet session is active.
@@ -30,7 +16,7 @@ const CHAIN_IDS = {
  */
 export async function checkWalletConnection() {
   try {
-    const output = await exec('walletconnect', ['whoami', '--json'], 3000);
+    const output = await wcExec('walletconnect', ['whoami', '--json'], 3000);
     const data = JSON.parse(output);
     if (data.connected === false) return null;
     return data;
@@ -71,7 +57,7 @@ export function buildEIP712TypedData({ fromAddress, requirement }) {
   const amount = requirement.amount || requirement.maxAmountRequired;
 
   // Determine chain ID: extra.chainId > parsed from network > fallback map > base
-  const chainId = extra.chainId || parseChainId(requirement.network) || CHAIN_IDS[requirement.chain] || CHAIN_IDS.base;
+  const chainId = extra.chainId || parseChainId(requirement.network) || EVM_CHAIN_IDS[requirement.chain] || CHAIN_IDS.base;
 
   const now = Math.floor(Date.now() / 1000);
   const nonce = '0x' + crypto.randomBytes(32).toString('hex');
@@ -104,7 +90,7 @@ export function buildEIP712TypedData({ fromAddress, requirement }) {
       from: fromAddress,
       to: payTo,
       value: amount,
-      validAfter: now - 600,
+      validAfter: now - 600, // 10 min in the past to tolerate clock skew between client and verifier
       validBefore: now + (maxTimeoutSeconds || 120),
       nonce,
     },
@@ -194,7 +180,7 @@ export async function handleX402Payment(paymentRequirements) {
   // 5. Sign via walletconnect CLI (120s timeout for user approval)
   let signResult;
   try {
-    const output = await exec('walletconnect', ['sign-typed-data', typedDataJson], 120000);
+    const output = await wcExec('walletconnect', ['sign-typed-data', typedDataJson], 120000);
     // walletconnect may print status messages before the JSON line — extract JSON only
     const jsonLine = output.split('\n').find(line => line.startsWith('{'));
     if (!jsonLine) throw new Error('No JSON output from walletconnect sign-typed-data');

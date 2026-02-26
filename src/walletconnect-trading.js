@@ -8,7 +8,7 @@
  * EVM only — Solana via WalletConnect is not supported.
  */
 
-import { exec } from './walletconnect-exec.js';
+import { wcExec } from './walletconnect-exec.js';
 
 /**
  * Get the address of the connected WalletConnect wallet.
@@ -16,7 +16,7 @@ import { exec } from './walletconnect-exec.js';
  */
 export async function getWalletConnectAddress() {
   try {
-    const output = await exec('walletconnect', ['whoami', '--json'], 3000);
+    const output = await wcExec('walletconnect', ['whoami', '--json'], 3000);
     const data = JSON.parse(output);
     if (data.connected === false) return null;
     return data.accounts?.[0]?.address || null;
@@ -49,7 +49,7 @@ export async function sendTransactionViaWalletConnect(txData, timeoutMs = 120000
     chainId,
   };
 
-  const output = await exec('walletconnect', ['send-transaction', JSON.stringify(payload)], timeoutMs);
+  const output = await wcExec('walletconnect', ['send-transaction', JSON.stringify(payload)], timeoutMs);
 
   // walletconnect may print status messages before the JSON line — extract JSON only
   const jsonLine = output.split('\n').find(line => line.startsWith('{'));

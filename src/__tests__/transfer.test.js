@@ -661,4 +661,94 @@ describe('sendTokens via WalletConnect', () => {
 
     vi.restoreAllMocks();
   });
+
+  test('sends max native ETH via walletconnect', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    vi.spyOn(wcTrading, 'sendTransactionViaWalletConnect').mockResolvedValue({ txHash: '0xmaxtx' });
+
+    fetch.mockImplementation(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (body.method === 'eth_getBalance') {
+        return { json: () => Promise.resolve({ result: '0xDE0B6B3A7640000' }) }; // 1 ETH
+      }
+      if (body.method === 'eth_estimateGas') {
+        return { json: () => Promise.resolve({ result: '0x5208' }) }; // 21000
+      }
+      if (body.method === 'eth_feeHistory') {
+        return { json: () => Promise.resolve({ result: { baseFeePerGas: ['0x3B9ACA00', '0x3B9ACA00'] } }) }; // 1 gwei
+      }
+      if (body.method === 'eth_getTransactionReceipt') {
+        return { json: () => Promise.resolve({ result: { status: '0x1', blockNumber: '0x400' } }) };
+      }
+      return { json: () => Promise.resolve({ result: '0x0' }) };
+    });
+
+    const result = await sendTokens({
+      to: '0x1234567890123456789012345678901234567890',
+      chain: 'evm',
+      walletconnect: true,
+      max: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.transactionHash).toBe('0xmaxtx');
+    // Should have sent less than 1 ETH (reserved for gas)
+    const call = wcTrading.sendTransactionViaWalletConnect.mock.calls[0][0];
+    expect(call.data).toBe('0x');
+    expect(BigInt(call.value)).toBeLessThan(1000000000000000000n);
+    expect(BigInt(call.value)).toBeGreaterThan(0n);
+
+    vi.restoreAllMocks();
+  });
+
+  test('sends max ERC-20 via walletconnect', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    vi.spyOn(wcTrading, 'sendTransactionViaWalletConnect').mockResolvedValue({ txHash: '0xmaxerc20' });
+
+    const tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+
+    fetch.mockImplementation(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (body.method === 'eth_getCode') {
+        return { json: () => Promise.resolve({ result: '0x608060' }) };
+      }
+      if (body.method === 'eth_call') {
+        const data = body.params?.[0]?.data;
+        if (data?.startsWith('0x313ce567')) {
+          // decimals() → 6
+          return { json: () => Promise.resolve({ result: '0x0000000000000000000000000000000000000000000000000000000000000006' }) };
+        }
+        if (data?.startsWith('0x70a08231')) {
+          // balanceOf() → 500 USDC (500 * 10^6)
+          return { json: () => Promise.resolve({ result: '0x' + (500000000n).toString(16).padStart(64, '0') }) };
+        }
+      }
+      if (body.method === 'eth_estimateGas') {
+        return { json: () => Promise.resolve({ result: '0x10000' }) }; // 65536
+      }
+      if (body.method === 'eth_getTransactionReceipt') {
+        return { json: () => Promise.resolve({ result: { status: '0x1', blockNumber: '0x500' } }) };
+      }
+      return { json: () => Promise.resolve({ result: '0x0' }) };
+    });
+
+    const result = await sendTokens({
+      to: '0x1234567890123456789012345678901234567890',
+      chain: 'evm',
+      token: tokenAddress,
+      walletconnect: true,
+      max: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.transactionHash).toBe('0xmaxerc20');
+
+    // Verify transfer calldata contains full balance (500 USDC = 500000000)
+    const call = wcTrading.sendTransactionViaWalletConnect.mock.calls[0][0];
+    expect(call.to).toBe(tokenAddress);
+    expect(call.data).toMatch(/^0xa9059cbb/);
+    expect(call.value).toBe('0');
+
+    vi.restoreAllMocks();
+  });
 });

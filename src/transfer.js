@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { base58Encode, exportWallet, getWalletConfig, verifyPassword } from './wallet.js';
 import { keccak256, signSecp256k1, rlpEncode, bigIntToMinBuf } from './crypto.js';
 import { getWalletConnectAddress, sendTransactionViaWalletConnect } from './walletconnect-trading.js';
+import { EVM_CHAIN_IDS } from './chain-ids.js';
 
 // ============= Constants =============
 
@@ -28,7 +29,8 @@ const CHAIN_RPCS = {
   'solana': process.env.NANSEN_SOLANA_RPC || DEFAULT_SOLANA_RPC,
 };
 
-const CHAIN_IDS = { 'ethereum': 1, 'evm': 1, 'base': 8453 };
+// Alias: buildEvmTransaction uses 'evm' as a generic fallback
+const CHAIN_IDS = { ...EVM_CHAIN_IDS, evm: 1 };
 
 // ============= Base58 =============
 
@@ -786,12 +788,24 @@ async function sendTokensViaWalletConnect({ to, amount, chain, token, max, dryRu
     };
   }
 
+  // Estimate gas instead of hardcoding — ERC-20 transfers with hooks may need more than 100k
+  let gasLimit;
+  try {
+    const estimateParams = { from: wcAddress, to: txTo };
+    if (txData && txData !== '0x') estimateParams.data = txData;
+    if (txValue && txValue !== '0') estimateParams.value = '0x' + BigInt(txValue).toString(16);
+    const gasEstimate = await rpcCall(rpcUrl, 'eth_estimateGas', [estimateParams]);
+    gasLimit = (BigInt(gasEstimate) * 120n / 100n).toString(); // 20% buffer
+  } catch {
+    gasLimit = token ? '100000' : '21000'; // fallback
+  }
+
   stderr('  Sending transaction via WalletConnect...');
   const wcResult = await sendTransactionViaWalletConnect({
     to: txTo,
     data: txData,
     value: txValue,
-    gas: token ? '100000' : '21000',
+    gas: gasLimit,
     chainId,
   });
 
