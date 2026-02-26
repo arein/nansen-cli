@@ -194,7 +194,7 @@ nansen wallet send --to <addr> --chain evm --max            # Send entire balanc
 
 | Option | Description |
 |--------|-------------|
-| `--chain` | Required for most commands. e.g. solana, ethereum, base, bnb, arbitrum, polygon, optimism, avalanche, linea, scroll, mantle, ronin, sei, plasma, sonic, monad, hyperevm, iotaevm |
+| `--chain` | Required for most commands. See [Supported Chains](#supported-chains) |
 | `--token` | Token address (aliases: `--mint`, `--token-address`) |
 | `--address` | Wallet address |
 | `--limit` | Results per page (default 10) |
@@ -215,6 +215,10 @@ nansen wallet send --to <addr> --chain evm --max            # Send entire balanc
 nansen schema                 # Full JSON schema — all commands, options, return fields
 nansen schema --pretty
 ```
+
+## Supported Chains
+
+`solana`, `ethereum`, `base`, `bnb`, `arbitrum`, `polygon`, `optimism`, `avalanche`, `linea`, `scroll`, `mantle`, `ronin`, `sei`, `plasma`, `sonic`, `monad`, `hyperevm`, `iotaevm`
 
 ## Gotchas
 
