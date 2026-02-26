@@ -18,18 +18,27 @@ Onchain analytics and DEX trading for AI agents.
 
 ## Quick Reference
 
-| Goal | Command |
-|------|---------|
-| Find a token address | `nansen research search "jupiter" --type token` |
-| Smart Money accumulation | `nansen research smart-money netflow --chain solana --limit 10` |
-| Smart Money flow for token | `nansen research token flow-intelligence --token <addr> --chain solana` |
-| Token screener | `nansen research token screener --chain solana --limit 20` |
-| Token fundamentals | `nansen research token info --token <addr> --chain solana` |
-| Who bought/sold | `nansen research token who-bought-sold --token <addr> --chain solana` |
-| Wallet balance | `nansen research profiler balance --address <addr> --chain solana` |
-| Wallet PnL | `nansen research profiler pnl-summary --address <addr> --chain ethereum` |
-| DEX swap | `nansen trade quote --chain solana --from <addr> --to <addr> --amount <base_units>` |
-| Perp leaderboard | `nansen research perp leaderboard --days 7 --limit 20` |
+```bash
+# Search for any token, wallet, or entity
+nansen research search "jupiter" --type token
+
+# Token price (OHLCV)
+nansen research token ohlcv --token <addr> --chain solana --timeframe 1h --limit 24
+
+# Smart Money — what are the pros buying?
+nansen research smart-money netflow --chain solana --limit 10
+
+# Token screener — trending tokens
+nansen research token screener --chain solana --timeframe 24h --smart-money --limit 20
+
+# Trade — get quote then execute
+nansen trade quote --chain solana --from <from_addr> --to <to_addr> --amount <base_units>
+nansen trade execute --quote <quote-id>
+
+# Create a wallet
+nansen wallet create                                      # interactive
+NANSEN_WALLET_PASSWORD="pass" nansen wallet create        # non-interactive
+```
 
 ## Setup
 
