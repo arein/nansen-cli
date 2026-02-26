@@ -33,6 +33,7 @@ const DOCUMENTED_ENDPOINTS = {
   ],
   tokenGodMode: [
     { name: 'indicators', method: 'tokenIndicators', endpoint: '/api/v1/tgm/indicators' },
+    { name: 'token-ohlcv', method: 'tokenOhlcv', endpoint: '/api/v1/tgm/token-ohlcv' },
     { name: 'screener', method: 'tokenScreener', endpoint: '/api/v1/token-screener' },
     { name: 'holders', method: 'tokenHolders', endpoint: '/api/v1/tgm/holders' },
     { name: 'flows', method: 'tokenFlows', endpoint: '/api/v1/tgm/flows' },
