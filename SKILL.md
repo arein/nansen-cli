@@ -29,7 +29,7 @@ nansen research smart-money netflow --chain solana --limit 10
 nansen research token screener --chain solana --timeframe 24h --smart-money --limit 20
 
 # Trade — quote then execute
-nansen trade quote --chain solana --from <sell_token> --to <buy_token> --amount <base_units>
+nansen trade quote --chain solana --from <from_token_address> --to <to_token_address> --amount <base_units>
 nansen trade execute --quote <quote-id>
 
 # Create a wallet
