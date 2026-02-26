@@ -288,7 +288,8 @@ describe('buildCommands', () => {
       saveConfigFn: vi.fn(),
       deleteConfigFn: vi.fn(),
       getConfigFileFn: vi.fn(() => '/home/user/.nansen/config.json'),
-      NansenAPIClass: vi.fn()
+      NansenAPIClass: vi.fn(),
+      isTTY: true
     };
     commands = buildCommands(mockDeps);
   });
@@ -327,34 +328,28 @@ describe('buildCommands', () => {
       expect(mockDeps.exit).toHaveBeenCalledWith(1);
     });
 
-    it('should save config on successful validation', async () => {
+    it('should save config without validation', async () => {
       mockDeps.promptFn.mockResolvedValue('valid-api-key');
-      // Use a proper constructor function for the mock
-      mockDeps.NansenAPIClass = function MockAPI() {
-        this.tokenScreener = vi.fn().mockResolvedValue({ data: [] });
-      };
-      commands = buildCommands(mockDeps);
-      
+
       await commands.login([], null, {}, {});
-      
+
       expect(mockDeps.saveConfigFn).toHaveBeenCalledWith({
         apiKey: 'valid-api-key',
         baseUrl: 'https://api.nansen.ai'
       });
     });
 
-    it('should exit when API validation fails', async () => {
-      mockDeps.promptFn.mockResolvedValue('invalid-key');
-      // Use a proper constructor function for the mock
-      mockDeps.NansenAPIClass = function MockAPI() {
-        this.tokenScreener = vi.fn().mockRejectedValue(new Error('Unauthorized'));
-      };
+    it('should exit when non-TTY and no API key available', async () => {
+      mockDeps.isTTY = false;
       commands = buildCommands(mockDeps);
-      
+      const savedEnv = process.env.NANSEN_API_KEY;
+      delete process.env.NANSEN_API_KEY;
+
       await commands.login([], null, {}, {});
-      
+
+      if (savedEnv !== undefined) process.env.NANSEN_API_KEY = savedEnv;
       expect(mockDeps.exit).toHaveBeenCalledWith(1);
-      expect(logs.some(l => l.includes('Invalid API key'))).toBe(true);
+      expect(logs.some(l => l.includes('No API key provided'))).toBe(true);
     });
   });
 
@@ -975,13 +970,14 @@ describe('login/logout flow', () => {
       saveConfigFn: vi.fn(),
       deleteConfigFn: vi.fn(),
       getConfigFileFn: vi.fn(() => '/home/user/.nansen/config.json'),
-      NansenAPIClass: vi.fn()
+      NansenAPIClass: vi.fn(),
+      isTTY: true
     };
     commands = buildCommands(mockDeps);
   });
 
   describe('login command', () => {
-    it('should prompt for API key', async () => {
+    it('should prompt for API key in TTY mode', async () => {
       mockDeps.promptFn.mockResolvedValue('');
       await commands.login([], null, {}, {});
       
@@ -990,10 +986,6 @@ describe('login/logout flow', () => {
 
     it('should trim whitespace from API key', async () => {
       mockDeps.promptFn.mockResolvedValue('  api-key-with-spaces  ');
-      mockDeps.NansenAPIClass = function MockAPI() {
-        this.tokenScreener = vi.fn().mockResolvedValue({ data: [] });
-      };
-      commands = buildCommands(mockDeps);
       
       await commands.login([], null, {}, {});
       
@@ -1011,59 +1003,29 @@ describe('login/logout flow', () => {
       expect(logs.some(l => l.includes('https://app.nansen.ai/api'))).toBe(true);
     });
 
-    it('should validate API key with test request', async () => {
+    it('should save config without validation', async () => {
       mockDeps.promptFn.mockResolvedValue('test-key');
-      const mockScreener = vi.fn().mockResolvedValue({ data: [] });
-      mockDeps.NansenAPIClass = function MockAPI(key) {
-        this.apiKey = key;
-        this.tokenScreener = mockScreener;
-      };
-      commands = buildCommands(mockDeps);
       
       await commands.login([], null, {}, {});
       
-      expect(mockScreener).toHaveBeenCalledWith({ 
-        chains: ['solana'], 
-        pagination: { page: 1, per_page: 1 } 
+      expect(mockDeps.saveConfigFn).toHaveBeenCalledWith({
+        apiKey: 'test-key',
+        baseUrl: 'https://api.nansen.ai'
       });
-    });
-
-    it('should show success message after validation', async () => {
-      mockDeps.promptFn.mockResolvedValue('valid-key');
-      mockDeps.NansenAPIClass = function MockAPI() {
-        this.tokenScreener = vi.fn().mockResolvedValue({ data: [] });
-      };
-      commands = buildCommands(mockDeps);
-      
-      await commands.login([], null, {}, {});
-      
-      expect(logs.some(l => l.includes('API key validated'))).toBe(true);
       expect(logs.some(l => l.includes('Saved to'))).toBe(true);
     });
 
-    it('should show error and exit on validation failure', async () => {
-      mockDeps.promptFn.mockResolvedValue('bad-key');
-      mockDeps.NansenAPIClass = function MockAPI() {
-        this.tokenScreener = vi.fn().mockRejectedValue(new Error('Unauthorized'));
-      };
+    it('should exit when non-TTY and no API key available', async () => {
+      mockDeps.isTTY = false;
       commands = buildCommands(mockDeps);
+      const savedEnv = process.env.NANSEN_API_KEY;
+      delete process.env.NANSEN_API_KEY;
       
       await commands.login([], null, {}, {});
       
-      expect(logs.some(l => l.includes('Invalid API key'))).toBe(true);
+      if (savedEnv !== undefined) process.env.NANSEN_API_KEY = savedEnv;
+      expect(logs.some(l => l.includes('No API key provided'))).toBe(true);
       expect(mockDeps.exit).toHaveBeenCalledWith(1);
-    });
-
-    it('should not save config on validation failure', async () => {
-      mockDeps.promptFn.mockResolvedValue('bad-key');
-      mockDeps.NansenAPIClass = function MockAPI() {
-        this.tokenScreener = vi.fn().mockRejectedValue(new Error('Unauthorized'));
-      };
-      commands = buildCommands(mockDeps);
-      
-      await commands.login([], null, {}, {});
-      
-      expect(mockDeps.saveConfigFn).not.toHaveBeenCalled();
     });
   });
 
