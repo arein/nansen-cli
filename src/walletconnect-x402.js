@@ -57,7 +57,7 @@ export function buildEIP712TypedData({ fromAddress, requirement }) {
   const amount = requirement.amount || requirement.maxAmountRequired;
 
   // Determine chain ID: extra.chainId > parsed from network > fallback map > base
-  const chainId = extra.chainId || parseChainId(requirement.network) || EVM_CHAIN_IDS[requirement.chain] || CHAIN_IDS.base;
+  const chainId = extra.chainId || parseChainId(requirement.network) || EVM_CHAIN_IDS[requirement.chain] || EVM_CHAIN_IDS.base;
 
   const now = Math.floor(Date.now() / 1000);
   const nonce = '0x' + crypto.randomBytes(32).toString('hex');

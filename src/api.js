@@ -507,7 +507,6 @@ export class NansenAPI {
         } else if (code === ErrorCode.PAYMENT_REQUIRED) {
           // Try x402 auto-payment: local wallet (with network fallback), then WalletConnect
           const hasManualSignature = !!(this.defaultHeaders['Payment-Signature'] || options.headers?.['Payment-Signature']);
-          let x402Paid = false;
 
           if (!hasManualSignature) {
             // 1. Try local wallet with fallback across payment networks
@@ -544,7 +543,8 @@ export class NansenAPI {
             } catch { /* local wallet unavailable, try WalletConnect */ }
 
             // 2. Fall back to WalletConnect (walletconnect-x402.js)
-            if (!x402Paid) {
+            // (local wallet returns early on success above, so we always reach here if it failed)
+            {
               let paymentRequirements;
               const paymentHeader = response.headers.get('payment-required');
               if (paymentHeader) {
