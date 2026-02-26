@@ -1,9 +1,6 @@
 ---
 name: nansen-cli
-description: |
-  Nansen CLI for onchain analytics and trading.
-  Smart Money flows, wallet profiling, token analysis, DEX trading, and perp markets.
-  Use when: analyzing wallets, tracking smart money, researching tokens, executing trades, or checking perp positions.
+description: Nansen CLI for onchain analytics, smart money tracking, DEX trading, and perp markets.
 license: MIT
 metadata:
   author: nansen-ai
@@ -38,6 +35,9 @@ nansen trade execute --quote <quote-id>
 # Create a wallet
 nansen wallet create                                      # interactive
 NANSEN_WALLET_PASSWORD="pass" nansen wallet create        # non-interactive
+
+# Stuck? Discover all commands, options, and return fields
+nansen schema --pretty
 ```
 
 ## Setup
@@ -161,6 +161,10 @@ nansen trade quote --chain solana \
 nansen trade execute --quote <quote-id>
 ```
 
+> ⚠️ Always inspect the quote response (price, slippage, expiry) before executing.
+> Quotes expire — if you wait too long, execute will fail. Get a fresh quote and retry.
+> Trades are irreversible once executed on-chain.
+
 **⚠️ Amounts are in base units (not human-readable):**
 
 | Token | Decimals | 1 unit = |
@@ -201,11 +205,21 @@ nansen wallet send --to <addr> --chain evm --max            # Send entire balanc
 | `--table` | ASCII table output |
 | `--stream` | NDJSON (one record per line) |
 | `--fields a,b` | Return only specific fields |
-| `--cache` | Cache responses (300s TTL) |
+| `--cache` | Cache responses (300s TTL). **Do not use with `trade` commands** — stale prices/quotes can cause bad trades |
 
 ## Schema Introspection
+
+> **Stuck?** Run `nansen schema` or `nansen schema <command> --pretty` to discover all available commands, options, and return fields.
 
 ```bash
 nansen schema                 # Full JSON schema — all commands, options, return fields
 nansen schema --pretty
 ```
+
+## Gotchas
+
+- Native tokens (SOL, ETH) don't work on most token endpoints — use wrapped addresses
+- Perp commands don't take `--chain` (Hyperliquid only)
+- `--amount` is always in base units, not human-readable
+- Profiler `trace` makes N×width API calls — can burn credits fast
+- x402 auth needs USDC on Base, not Solana
