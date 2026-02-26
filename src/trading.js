@@ -861,7 +861,7 @@ EXAMPLES:
 
         const quoteId = saveQuote(response, chain);
         errorOutput(`\n  Quote ID: ${quoteId}`);
-        errorOutput(`  Execute:  nansen execute --quote ${quoteId}`);
+        errorOutput(`  Execute:  nansen trade execute --quote ${quoteId}`);
 
         if (response.quotes[0]?.approvalAddress && !isNativeToken(response.quotes[0]?.inputMint)) {
           errorOutput(`\n  Warning: This token swap requires an ERC-20 approval step.`);
@@ -889,7 +889,7 @@ EXAMPLES:
 
       if (!quoteId) {
         errorOutput(`
-Usage: nansen execute --quote <quoteId> [options]
+Usage: nansen trade execute --quote <quoteId> [options]
 
 OPTIONS:
   --quote <id>              Quote ID from 'nansen quote'
@@ -897,7 +897,7 @@ OPTIONS:
   --no-simulate             Skip pre-broadcast simulation
 
 EXAMPLES:
-  nansen execute --quote 1708900000000-abc123
+  nansen trade execute --quote 1708900000000-abc123
 `);
         exit(1);
         return;

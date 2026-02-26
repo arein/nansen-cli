@@ -567,7 +567,7 @@ describe('buildTradingCommands', () => {
 
     await cmds.execute([], null, {}, {});
     expect(exitCalled).toBe(true);
-    expect(logs.some(l => l.includes('Usage: nansen execute'))).toBe(true);
+    expect(logs.some(l => l.includes('Usage: nansen trade execute'))).toBe(true);
   });
 
   it('should error when no wallet exists for quote', async () => {

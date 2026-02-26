@@ -838,6 +838,7 @@ export function buildCommands(deps = {}) {
     api = null,
     promptFn = prompt,
     log = console.log,
+    errorOutput = console.error,
     NansenAPIClass = NansenAPI,
     saveConfigFn = saveConfig,
     deleteConfigFn = deleteConfig,
