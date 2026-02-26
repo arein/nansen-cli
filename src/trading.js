@@ -11,6 +11,7 @@ import path from 'path';
 import { exportWallet, getDefaultAddress, showWallet, listWallets } from './wallet.js';
 import { base58Decode } from './transfer.js';
 import { keccak256, signSecp256k1, rlpEncode } from './crypto.js';
+import { getWalletConnectAddress, sendTransactionViaWalletConnect, sendApprovalViaWalletConnect } from './walletconnect-trading.js';
 
 // ============= Constants =============
 
@@ -203,7 +204,7 @@ export async function executeTransaction(params, { retries = 2, retryDelayMs = 1
  * Save a quote response to disk for later execution.
  * @returns {string} Quote ID
  */
-export function saveQuote(quoteResponse, chain) {
+export function saveQuote(quoteResponse, chain, signerType = 'local') {
   const dir = getQuotesDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -213,7 +214,7 @@ export function saveQuote(quoteResponse, chain) {
   const hash = crypto.randomBytes(4).toString('hex');
   const quoteId = `${timestamp}-${hash}`;
 
-  const data = { quoteId, chain, timestamp, response: quoteResponse };
+  const data = { quoteId, chain, timestamp, signerType, response: quoteResponse };
 
   fs.writeFileSync(path.join(dir, `${quoteId}.json`), JSON.stringify(data, null, 2), { mode: 0o600 });
   cleanupQuotes();
@@ -813,8 +814,22 @@ EXAMPLES:
         const chainConfig = resolveChain(chain);
         const chainType = chainConfig.type === 'evm' ? 'evm' : 'solana';
 
+        const isWalletConnect = walletName === 'walletconnect' || walletName === 'wc';
+
         let walletAddress;
-        if (walletName) {
+        if (isWalletConnect) {
+          if (chainType !== 'evm') {
+            errorOutput('WalletConnect is only supported for EVM chains');
+            exit(1);
+            return;
+          }
+          walletAddress = await getWalletConnectAddress();
+          if (!walletAddress) {
+            errorOutput('No WalletConnect session active. Run: walletconnect connect');
+            exit(1);
+            return;
+          }
+        } else if (walletName) {
           const wallet = showWallet(walletName);
           walletAddress = chainType === 'solana' ? wallet.solana : wallet.evm;
         } else {
@@ -859,7 +874,7 @@ EXAMPLES:
         errorOutput('');
         response.quotes.forEach((q, i) => errorOutput(formatQuote(q, i)));
 
-        const quoteId = saveQuote(response, chain);
+        const quoteId = saveQuote(response, chain, isWalletConnect ? 'walletconnect' : 'local');
         errorOutput(`\n  Quote ID: ${quoteId}`);
         errorOutput(`  Execute:  nansen execute --quote ${quoteId}`);
 
@@ -930,21 +945,50 @@ EXAMPLES:
           return;
         }
 
-        // Get wallet credentials once (before the loop)
-        const password = process.env.NANSEN_WALLET_PASSWORD || await promptPassword('Enter wallet password: ', deps);
+        // Determine if this is a WalletConnect-signed quote
+        const isWalletConnect = quoteData.signerType === 'walletconnect'
+          || walletName === 'walletconnect' || walletName === 'wc';
 
-        let effectiveWalletName = walletName;
-        if (!effectiveWalletName) {
-          const list = listWallets();
-          effectiveWalletName = list.defaultWallet;
-        }
-        if (!effectiveWalletName) {
-          errorOutput('No wallet found. Create one with: nansen wallet create');
-          exit(1);
-          return;
+        let exported = null;
+        if (!isWalletConnect) {
+          // Get wallet credentials once (before the loop)
+          const password = process.env.NANSEN_WALLET_PASSWORD || await promptPassword('Enter wallet password: ', deps);
+
+          let effectiveWalletName = walletName;
+          if (!effectiveWalletName) {
+            const list = listWallets();
+            effectiveWalletName = list.defaultWallet;
+          }
+          if (!effectiveWalletName) {
+            errorOutput('No wallet found. Create one with: nansen wallet create');
+            exit(1);
+            return;
+          }
+
+          exported = exportWallet(effectiveWalletName, password);
+        } else {
+          // Verify WalletConnect session is still active and address matches quote
+          if (chainType !== 'evm') {
+            errorOutput('WalletConnect is only supported for EVM chains');
+            exit(1);
+            return;
+          }
+          const wcAddress = await getWalletConnectAddress();
+          if (!wcAddress) {
+            errorOutput('No WalletConnect session active. Run: walletconnect connect');
+            exit(1);
+            return;
+          }
+          // Check address matches the one used during quoting
+          const quoteWallet = quoteData.response?.quotes?.[0]?.transaction?.from
+            || quoteData.response?.metadata?.userWalletAddress;
+          if (quoteWallet && wcAddress.toLowerCase() !== quoteWallet.toLowerCase()) {
+            errorOutput(`Connected wallet (${wcAddress}) doesn't match quote. Get a new quote with --wallet walletconnect`);
+            exit(1);
+            return;
+          }
         }
 
-        const exported = exportWallet(effectiveWalletName, password);
         let lastQuoteError = null;
 
         for (let qi = startIndex; qi < endIndex; qi++) {
@@ -981,6 +1025,149 @@ EXAMPLES:
               errorOutput('  Signing Solana transaction...');
               signedTransaction = signSolanaTransaction(txBase64, exported.solana.privateKey);
               requestId = currentQuote.metadata?.requestId;
+
+            } else if (isWalletConnect) {
+              // EVM via WalletConnect: wallet signs and may broadcast
+              const wcAddress = await getWalletConnectAddress();
+              const isNative = isNativeToken(currentQuote.inputMint);
+
+              // Validate transaction.value (same checks as local wallet)
+              const txValue = BigInt(currentQuote.transaction.value || '0');
+              if (isNative) {
+                const expectedValue = BigInt(currentQuote.inAmount || currentQuote.inputAmount || '0');
+                if (txValue !== expectedValue) {
+                  errorOutput(`  ❌ Transaction value mismatch for ${quoteName}: tx.value=${txValue}, expected=${expectedValue}`);
+                  if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                  lastQuoteError = `${quoteName} transaction value mismatch`;
+                  continue;
+                }
+              } else {
+                if (txValue > 0n) {
+                  errorOutput(`  ❌ ERC-20 swap has non-zero tx.value (${txValue}) for ${quoteName} — aborting`);
+                  if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                  lastQuoteError = `${quoteName} unexpected tx.value`;
+                  continue;
+                }
+              }
+
+              // Handle approval via WalletConnect if needed
+              if (currentQuote.approvalAddress && !isNative) {
+                const inputAmount = BigInt(currentQuote.inputAmount || currentQuote.inAmount || '0');
+                const existingAllowance = await checkErc20Allowance(
+                  chain, currentQuote.inputMint, wcAddress, currentQuote.approvalAddress
+                );
+
+                if (existingAllowance >= inputAmount && existingAllowance > 0n) {
+                  errorOutput(`  ✓ Sufficient allowance exists for ${quoteName}, skipping approval`);
+                } else {
+                  errorOutput(`  ⚠ Approval required → ${currentQuote.approvalAddress}`);
+                  errorOutput(`  Sending approval via WalletConnect...`);
+                  try {
+                    const approvalResult = await sendApprovalViaWalletConnect(
+                      currentQuote.inputMint,
+                      currentQuote.approvalAddress,
+                      chainConfig.chainId,
+                    );
+                    let approvalTxHash = approvalResult.txHash;
+                    if (!approvalTxHash && approvalResult.signedTransaction) {
+                      // Wallet returned a signed tx instead of broadcasting — broadcast via Trading API
+                      errorOutput(`  Broadcasting approval via Trading API...`);
+                      const broadcastResult = await executeTransaction({
+                        signedTransaction: approvalResult.signedTransaction,
+                        chain,
+                        simulate: !noSimulate,
+                      });
+                      if (broadcastResult.status !== 'Success') {
+                        throw new Error(broadcastResult.error || 'broadcast failed');
+                      }
+                      approvalTxHash = broadcastResult.txHash;
+                    }
+                    if (approvalTxHash) {
+                      errorOutput(`  Waiting for approval confirmation...`);
+                      const receipt = await waitForReceipt(chain, approvalTxHash);
+                      errorOutput(`  ✓ Approval confirmed in block ${parseInt(receipt.blockNumber, 16)}: ${approvalTxHash}`);
+                    }
+                  } catch (approvalErr) {
+                    errorOutput(`  ❌ Approval failed for ${quoteName}: ${approvalErr.message}`);
+                    if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                    lastQuoteError = `${quoteName} approval failed`;
+                    continue;
+                  }
+                  await new Promise(r => setTimeout(r, 2000));
+                  errorOutput('');
+                }
+              }
+
+              // Pre-flight simulation
+              if (!noSimulate) {
+                const txData = currentQuote.transaction;
+                const sim = await simulateEvmCall(chain, {
+                  from: wcAddress,
+                  to: txData.to,
+                  data: txData.data,
+                  value: txData.value ? '0x' + BigInt(txData.value).toString(16) : '0x0',
+                });
+                if (!sim.success) {
+                  errorOutput(`  ⚠ Simulation failed for ${quoteName}: ${sim.reason}`);
+                  if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                  lastQuoteError = `${quoteName} simulation failed: ${sim.reason}`;
+                  continue;
+                }
+              }
+
+              // Resolve gas
+              const txData = currentQuote.transaction;
+              const apiGas = parseInt(currentQuote.gas || "0");
+              const txGas = parseInt(txData.gas || txData.gasLimit || "0");
+              const finalGas = apiGas > 0 ? apiGas : txGas;
+
+              // Send transaction via WalletConnect
+              errorOutput('  Sending transaction via WalletConnect...');
+              let wcResult;
+              try {
+                wcResult = await sendTransactionViaWalletConnect({
+                  to: txData.to,
+                  data: txData.data,
+                  value: txData.value || '0',
+                  gas: String(finalGas),
+                  chainId: chainConfig.chainId,
+                });
+              } catch (wcErr) {
+                errorOutput(`  ❌ WalletConnect transaction failed for ${quoteName}: ${wcErr.message}`);
+                if (qi + 1 < endIndex) errorOutput(`  Trying next quote...`);
+                lastQuoteError = `${quoteName}: ${wcErr.message}`;
+                continue;
+              }
+
+              if (wcResult.txHash) {
+                // Wallet broadcast — verify on-chain
+                errorOutput('  Verifying on-chain status...');
+                try {
+                  await waitForReceipt(chain, wcResult.txHash);
+                } catch (receiptErr) {
+                  errorOutput(`\n  ⚠ Transaction was broadcast but REVERTED on-chain!`);
+                  errorOutput(`    Tx Hash:   ${wcResult.txHash}`);
+                  errorOutput(`    Explorer:  ${chainConfig.explorer}${wcResult.txHash}`);
+                  errorOutput(`    Error:     ${receiptErr.message}`);
+                  if (qi + 1 < endIndex) {
+                    errorOutput(`  Trying next quote...`);
+                    lastQuoteError = `${quoteName} reverted on-chain`;
+                    continue;
+                  }
+                  exit(1);
+                  return;
+                }
+
+                errorOutput(`\n  ✓ Transaction successful!`);
+                errorOutput(`    Tx Hash:   ${wcResult.txHash}`);
+                errorOutput(`    Chain:       ${chainConfig.name}`);
+                errorOutput(`    Explorer:    ${chainConfig.explorer}${wcResult.txHash}`);
+                errorOutput('');
+                return undefined; // Success
+              }
+
+              // Wallet returned signedTransaction — fall through to broadcast via Trading API
+              signedTransaction = wcResult.signedTransaction;
 
             } else {
               // EVM: quote.transaction is { to, data, value, gas, gasPrice }

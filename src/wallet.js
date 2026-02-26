@@ -629,45 +629,47 @@ export function buildWalletCommands(deps = {}) {
 
         'send': async () => {
           const { sendTokens } = await import('./transfer.js');
-          
+
           if (!options.to) {
             log('❌ --to <address> is required');
             exit(1);
             return;
           }
-          
+
           const isMax = flags.max || options.amount === 'max';
           if (!options.amount && !isMax) {
             log('❌ --amount <number> or --max is required');
             exit(1);
             return;
           }
-          
+
           if (!options.chain) {
             log('❌ --chain <evm|solana> is required');
             exit(1);
             return;
           }
-          
+
           if (!['evm', 'solana', 'ethereum', 'base'].includes(options.chain)) {
             log('❌ --chain must be one of: evm, solana, ethereum, base');
             exit(1);
             return;
           }
-          
-          const password = process.env.NANSEN_WALLET_PASSWORD || await promptPassword('Enter wallet password: ', deps);
+
+          const isWalletConnect = options.wallet === 'walletconnect' || options.wallet === 'wc';
+          const password = isWalletConnect ? null : (process.env.NANSEN_WALLET_PASSWORD || await promptPassword('Enter wallet password: ', deps));
           const dryRun = flags['dry-run'] || flags.dryRun;
-          
+
           try {
             const sendOpts = {
               to: options.to,
               amount: isMax ? '0' : String(options.amount),
               chain: options.chain,
               token: options.token || null,
-              wallet: options.wallet || null,
+              wallet: isWalletConnect ? null : (options.wallet || null),
               max: isMax,
               password,
               dryRun,
+              walletconnect: isWalletConnect,
             };
 
             if (dryRun) {
@@ -731,7 +733,7 @@ OPTIONS:
   --amount <number>          Amount to send in human-readable format (required unless --max)
   --chain <evm|solana>       Blockchain to use (required for send)
   --token <address>          Token contract/mint address (optional, sends native if omitted)
-  --wallet <name>            Wallet to use (optional, uses default if omitted)
+  --wallet <name>            Wallet to use (optional, uses default if omitted; use "walletconnect" or "wc" for WalletConnect, EVM only)
   --max                      Send entire balance (deducts gas for native transfers)
 
 ENVIRONMENT:

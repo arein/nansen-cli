@@ -19,6 +19,7 @@ import {
 import { keccak256, signSecp256k1, rlpEncode } from '../crypto.js';
 import { base58Encode } from '../wallet.js';
 import * as wallet from '../wallet.js';
+import * as wcTrading from '../walletconnect-trading.js';
 
 // ============= Unit Tests =============
 
@@ -507,5 +508,157 @@ describe('sendTokens integration', () => {
       await sendTokens({ to: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4', amount: '0.001', chain: 'evm', wallet: 'my-wallet', password: 'test' });
       expect(wallet.exportWallet).toHaveBeenCalledWith('my-wallet', 'test');
     });
+  });
+});
+
+// ============= WalletConnect Transfer Tests =============
+
+describe('sendTokens via WalletConnect', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('rejects Solana + walletconnect', async () => {
+    await expect(sendTokens({
+      to: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM',
+      amount: '0.5',
+      chain: 'solana',
+      walletconnect: true,
+    })).rejects.toThrow('WalletConnect is only supported for EVM chains');
+  });
+
+  test('errors when no WalletConnect session', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue(null);
+
+    await expect(sendTokens({
+      to: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4',
+      amount: '0.1',
+      chain: 'evm',
+      walletconnect: true,
+    })).rejects.toThrow('No WalletConnect session active');
+
+    vi.restoreAllMocks();
+  });
+
+  test('skips password verification for walletconnect', async () => {
+    const exportSpy = vi.spyOn(wallet, 'exportWallet');
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    vi.spyOn(wcTrading, 'sendTransactionViaWalletConnect').mockResolvedValue({ txHash: '0xmocktx123' });
+
+    // Mock RPC calls for native transfer
+    fetch.mockImplementation(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      const r = {
+        'eth_getTransactionReceipt': { status: '0x1', blockNumber: '0x100' },
+      };
+      return { json: () => Promise.resolve({ result: r[body.method] || '0x0' }) };
+    });
+
+    const result = await sendTokens({
+      to: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4',
+      amount: '0.1',
+      chain: 'evm',
+      walletconnect: true,
+      // no password provided
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.transactionHash).toBe('0xmocktx123');
+    expect(result.from).toBe('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    // Should NOT have called exportWallet
+    expect(exportSpy).not.toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+  });
+
+  test('dry run with walletconnect returns tx data', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+
+    const result = await sendTokens({
+      to: '0x1234567890123456789012345678901234567890',
+      amount: '0.5',
+      chain: 'evm',
+      walletconnect: true,
+      dryRun: true,
+    });
+
+    expect(result.dryRun).toBe(true);
+    expect(result.from).toBe('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    expect(result.to).toBe('0x1234567890123456789012345678901234567890');
+    expect(result.amount).toBe('0.5');
+
+    vi.restoreAllMocks();
+  });
+
+  test('sends native ETH via walletconnect', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    vi.spyOn(wcTrading, 'sendTransactionViaWalletConnect').mockResolvedValue({ txHash: '0xnativetx' });
+
+    fetch.mockImplementation(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      const r = {
+        'eth_getTransactionReceipt': { status: '0x1', blockNumber: '0x200' },
+      };
+      return { json: () => Promise.resolve({ result: r[body.method] || '0x0' }) };
+    });
+
+    const result = await sendTokens({
+      to: '0x1234567890123456789012345678901234567890',
+      amount: '1.0',
+      chain: 'evm',
+      walletconnect: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.transactionHash).toBe('0xnativetx');
+
+    // Verify sendTransactionViaWalletConnect was called with correct params
+    const call = wcTrading.sendTransactionViaWalletConnect.mock.calls[0][0];
+    expect(call.to).toBe('0x1234567890123456789012345678901234567890');
+    expect(call.data).toBe('0x');
+    expect(call.value).toBe('1000000000000000000'); // 1 ETH in wei
+
+    vi.restoreAllMocks();
+  });
+
+  test('sends ERC-20 via walletconnect', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    vi.spyOn(wcTrading, 'sendTransactionViaWalletConnect').mockResolvedValue({ txHash: '0xerc20tx' });
+
+    const tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+
+    fetch.mockImplementation(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (body.method === 'eth_getCode') {
+        return { json: () => Promise.resolve({ result: '0x608060' }) }; // contract exists
+      }
+      if (body.method === 'eth_call') {
+        // decimals() returns 6
+        return { json: () => Promise.resolve({ result: '0x0000000000000000000000000000000000000000000000000000000000000006' }) };
+      }
+      if (body.method === 'eth_getTransactionReceipt') {
+        return { json: () => Promise.resolve({ result: { status: '0x1', blockNumber: '0x300' } }) };
+      }
+      return { json: () => Promise.resolve({ result: '0x0' }) };
+    });
+
+    const result = await sendTokens({
+      to: '0x1234567890123456789012345678901234567890',
+      amount: '100',
+      chain: 'evm',
+      token: tokenAddress,
+      walletconnect: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.transactionHash).toBe('0xerc20tx');
+
+    // Verify the transfer calldata
+    const call = wcTrading.sendTransactionViaWalletConnect.mock.calls[0][0];
+    expect(call.to).toBe(tokenAddress);
+    expect(call.data).toMatch(/^0xa9059cbb/); // transfer selector
+    expect(call.value).toBe('0');
+
+    vi.restoreAllMocks();
   });
 });

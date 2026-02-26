@@ -38,6 +38,7 @@ import {
   createWallet,
   listWallets,
 } from '../wallet.js';
+import * as wcTrading from '../walletconnect-trading.js';
 
 let originalHome;
 let tempDir;
@@ -758,6 +759,194 @@ describe('buildTradingCommands', () => {
     await cmds.execute([], null, {}, { quote: quoteId });
     expect(exitCalled).toBe(true);
     expect(logs.some(l => l.includes('transaction data'))).toBe(true);
+  });
+});
+
+// ============= WalletConnect Integration =============
+
+describe('WalletConnect quote support', () => {
+  it('should save signerType in quote when using walletconnect', () => {
+    const quoteId = saveQuote({
+      success: true,
+      quotes: [{ aggregator: 'test', transaction: { to: '0xabc', data: '0x1234' } }],
+    }, 'base', 'walletconnect');
+
+    const loaded = loadQuote(quoteId);
+    expect(loaded.signerType).toBe('walletconnect');
+  });
+
+  it('should default signerType to local', () => {
+    const quoteId = saveQuote({
+      success: true,
+      quotes: [{ aggregator: 'test', transaction: { to: '0xabc', data: '0x1234' } }],
+    }, 'base');
+
+    const loaded = loadQuote(quoteId);
+    expect(loaded.signerType).toBe('local');
+  });
+
+  it('should reject Solana + walletconnect for quote', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+
+    const logs = [];
+    let exitCalled = false;
+    const cmds = buildTradingCommands({
+      errorOutput: (msg) => logs.push(msg),
+      exit: () => { exitCalled = true; },
+    });
+
+    await cmds.quote([], null, {}, {
+      chain: 'solana',
+      from: 'So11111111111111111111111111111111111111112',
+      to: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      amount: '1000000000',
+      wallet: 'walletconnect',
+    });
+
+    expect(exitCalled).toBe(true);
+    expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('should error when no WalletConnect session for quote', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue(null);
+
+    const logs = [];
+    let exitCalled = false;
+    const cmds = buildTradingCommands({
+      errorOutput: (msg) => logs.push(msg),
+      exit: () => { exitCalled = true; },
+    });
+
+    await cmds.quote([], null, {}, {
+      chain: 'base',
+      from: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+      to: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+      amount: '1000000000000000000',
+      wallet: 'walletconnect',
+    });
+
+    expect(exitCalled).toBe(true);
+    expect(logs.some(l => l.includes('No WalletConnect session active'))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('should accept "wc" as walletconnect alias for quote', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue(null);
+
+    const logs = [];
+    let exitCalled = false;
+    const cmds = buildTradingCommands({
+      errorOutput: (msg) => logs.push(msg),
+      exit: () => { exitCalled = true; },
+    });
+
+    await cmds.quote([], null, {}, {
+      chain: 'base',
+      from: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+      to: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+      amount: '1000000000000000000',
+      wallet: 'wc',
+    });
+
+    expect(exitCalled).toBe(true);
+    expect(logs.some(l => l.includes('No WalletConnect session active'))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe('WalletConnect execute support', () => {
+  it('should skip password prompt for walletconnect signerType', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+    vi.spyOn(wcTrading, 'sendTransactionViaWalletConnect').mockResolvedValue({ txHash: '0xmocktx' });
+
+    // Mock global fetch for waitForReceipt RPC calls
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      json: () => Promise.resolve({ result: { status: '0x1', blockNumber: '0x100' } }),
+    }));
+
+    const quoteId = saveQuote({
+      success: true,
+      quotes: [{
+        aggregator: 'test',
+        inputMint: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        outputMint: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        inAmount: '1000000000000000000',
+        outAmount: '3000000000',
+        transaction: { to: '0xabc', data: '0x1234', value: '1000000000000000000', gas: '200000' },
+      }],
+    }, 'base', 'walletconnect');
+
+    const logs = [];
+    const cmds = buildTradingCommands({
+      errorOutput: (msg) => logs.push(msg),
+      exit: () => {},
+    });
+
+    // Should not require NANSEN_WALLET_PASSWORD since it's walletconnect
+    delete process.env.NANSEN_WALLET_PASSWORD;
+
+    await cmds.execute([], null, {}, { quote: quoteId });
+
+    // Should have reached "Sending transaction via WalletConnect..." without password
+    expect(logs.some(l => l.includes('WalletConnect'))).toBe(true);
+    // Should not have asked for password
+    expect(logs.every(l => !l.includes('Enter wallet password'))).toBe(true);
+
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('should error when WC session expired during execute', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue(null);
+
+    const quoteId = saveQuote({
+      success: true,
+      quotes: [{
+        aggregator: 'test',
+        transaction: { to: '0xabc', data: '0x1234', value: '0', gas: '200000' },
+      }],
+    }, 'base', 'walletconnect');
+
+    const logs = [];
+    let exitCalled = false;
+    const cmds = buildTradingCommands({
+      errorOutput: (msg) => logs.push(msg),
+      exit: () => { exitCalled = true; },
+    });
+
+    await cmds.execute([], null, {}, { quote: quoteId });
+
+    expect(exitCalled).toBe(true);
+    expect(logs.some(l => l.includes('No WalletConnect session active'))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('should reject Solana + walletconnect for execute', async () => {
+    const quoteId = saveQuote({
+      success: true,
+      quotes: [{
+        aggregator: 'test',
+        transaction: 'AQAAAA==', // base64 Solana tx
+      }],
+    }, 'solana', 'walletconnect');
+
+    const logs = [];
+    let exitCalled = false;
+    const cmds = buildTradingCommands({
+      errorOutput: (msg) => logs.push(msg),
+      exit: () => { exitCalled = true; },
+    });
+
+    await cmds.execute([], null, {}, { quote: quoteId });
+
+    expect(exitCalled).toBe(true);
+    expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(true);
   });
 });
 

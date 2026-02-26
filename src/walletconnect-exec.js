@@ -1,0 +1,22 @@
+/**
+ * Shared subprocess helper for WalletConnect CLI calls.
+ *
+ * Used by walletconnect-x402.js and walletconnect-trading.js.
+ */
+
+import { execFile } from 'child_process';
+
+/**
+ * Execute a CLI command and return stdout.
+ */
+export function exec(cmd, args, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: timeoutMs }, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error(err.message));
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+}

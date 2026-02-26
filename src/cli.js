@@ -144,14 +144,15 @@ export const SCHEMA = {
             chain: { type: 'string', default: 'ethereum', description: 'Blockchain' },
             from: { type: 'string', required: true, description: 'Token to sell (address or symbol)' },
             to: { type: 'string', required: true, description: 'Token to buy (address or symbol)' },
-            amount: { type: 'string', required: true, description: 'Amount in base units (wei, lamports, etc.)' }
+            amount: { type: 'string', required: true, description: 'Amount to swap' },
+            wallet: { type: 'string', description: 'Wallet name, or "walletconnect"/"wc" for WalletConnect (EVM only)' }
           }
         },
         'execute': {
           description: 'Sign and broadcast a quoted trade',
           options: {
             chain: { type: 'string', default: 'ethereum', description: 'Blockchain' },
-            wallet: { type: 'string', description: 'Wallet name or address' }
+            wallet: { type: 'string', description: 'Wallet name, or "walletconnect"/"wc" for WalletConnect (EVM only)' }
           }
         }
       }

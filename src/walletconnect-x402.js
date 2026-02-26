@@ -5,9 +5,9 @@
  * Uses the walletconnect CLI to check wallet connection and sign EIP-712 typed data.
  */
 
-import { execFile } from 'child_process';
 import crypto from 'crypto';
 import { NansenError, ErrorCode } from './api.js';
+import { exec } from './walletconnect-exec.js';
 
 // Chain name → EIP-155 chain ID mapping
 const CHAIN_IDS = {
@@ -23,22 +23,6 @@ const CHAIN_IDS = {
   zksync: 324,
   mantle: 5000,
 };
-
-/**
- * Execute a CLI command and return stdout
- */
-function exec(cmd, args, timeoutMs = 10000) {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: timeoutMs }, (err, stdout, stderr) => {
-      if (err) {
-        // Prefer the actual error message; stderr may just contain status logs
-        reject(new Error(err.message));
-        return;
-      }
-      resolve(stdout.trim());
-    });
-  });
-}
 
 /**
  * Check if a WalletConnect wallet session is active.
