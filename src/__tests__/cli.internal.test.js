@@ -1132,6 +1132,7 @@ describe('SCHEMA', () => {
     expect(SCHEMA.globalOptions.table).toBeDefined();
     expect(SCHEMA.globalOptions.fields).toBeDefined();
     expect(SCHEMA.globalOptions['no-retry']).toBeDefined();
+
   });
 
   it('should list supported chains', () => {

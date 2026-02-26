@@ -7,6 +7,8 @@
 import crypto from 'crypto';
 import { base58Encode, exportWallet, getWalletConfig, verifyPassword } from './wallet.js';
 import { keccak256, signSecp256k1, rlpEncode, bigIntToMinBuf } from './crypto.js';
+import { getWalletConnectAddress, sendTransactionViaWalletConnect } from './walletconnect-trading.js';
+import { EVM_CHAIN_IDS } from './chain-ids.js';
 
 // ============= Constants =============
 
@@ -27,7 +29,8 @@ const CHAIN_RPCS = {
   'solana': process.env.NANSEN_SOLANA_RPC || DEFAULT_SOLANA_RPC,
 };
 
-const CHAIN_IDS = { 'ethereum': 1, 'evm': 1, 'base': 8453 };
+// Alias: buildEvmTransaction uses 'evm' as a generic fallback
+const CHAIN_IDS = { ...EVM_CHAIN_IDS, evm: 1 };
 
 // ============= Base58 =============
 
@@ -587,11 +590,18 @@ async function broadcastTransaction(signedTx, chain) {
 // Exported for testing
 export { parseAmount, formatAmount, signEd25519, encodeCompactU16, base58Decode, base58DecodePubkey, deriveATA, validateEvmAddress, validateSolanaAddress, bigIntToHex };
 
-export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false, dryRun = false }) {
+export async function sendTokens({ to, amount, chain, token = null, wallet = null, password, max = false, dryRun = false, walletconnect = false }) {
   // Validate address
   const validate = chain === 'solana' ? validateSolanaAddress : validateEvmAddress;
   const v = validate(to);
   if (!v.valid) throw new Error(`Invalid recipient: ${v.error}`);
+
+  if (walletconnect) {
+    if (chain === 'solana') {
+      throw new Error('WalletConnect is only supported for EVM chains');
+    }
+    return sendTokensViaWalletConnect({ to, amount, chain, token, max, dryRun });
+  }
 
   const config = getWalletConfig();
   if (!verifyPassword(password, config)) throw new Error('Incorrect password');
@@ -697,6 +707,127 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
     ...(confirmation.blockNumber ? { blockNumber: confirmation.blockNumber } : {}),
     from: chain === 'solana' ? walletData.solana.address : walletData.evm.address,
     to, amount: finalAmount, token, chain,
+    explorer: getExplorerUrl(chain, txHash),
+  };
+}
+
+/**
+ * Send tokens via WalletConnect (EVM only).
+ */
+async function sendTokensViaWalletConnect({ to, amount, chain, token, max, dryRun }) {
+  const rpcUrl = CHAIN_RPCS[chain] || CHAIN_RPCS.evm;
+  const chainId = CHAIN_IDS[chain] || 1;
+
+  const wcAddress = await getWalletConnectAddress();
+  if (!wcAddress) throw new Error('No WalletConnect session active. Run: walletconnect connect');
+
+  let txTo, txValue, txData, decimals = 18;
+
+  if (token) {
+    // Validate ERC-20 contract
+    const code = await rpcCall(rpcUrl, 'eth_getCode', [token, 'latest']);
+    if (!code || code === '0x' || code === '0x0') {
+      throw new Error(`Address ${token} is not a contract — not a valid ERC-20 token`);
+    }
+    const decResult = await rpcCall(rpcUrl, 'eth_call', [{ to: token, data: '0x313ce567' }, 'latest']);
+    decimals = parseInt(decResult, 16);
+
+    if (max) {
+      // Max ERC-20: full token balance
+      const balResult = await rpcCall(rpcUrl, 'eth_call', [{
+        to: token, data: '0x70a08231' + wcAddress.slice(2).toLowerCase().padStart(64, '0'),
+      }, 'latest']);
+      const tokenBalance = BigInt(balResult || '0x0');
+      if (tokenBalance === 0n) throw new Error('Token balance is zero');
+      amount = formatAmount(tokenBalance, decimals);
+      stderr(`  Max send: ${amount} (ERC-20)`);
+    }
+
+    const amountRaw = parseAmount(amount, decimals);
+    const toStripped = to.replace(/^0x/, '').padStart(64, '0');
+    const amtHex = amountRaw.toString(16).padStart(64, '0');
+
+    txTo = token;
+    txValue = '0';
+    txData = '0x' + ERC20_TRANSFER_SELECTOR + toStripped + amtHex;
+  } else {
+    // Native ETH
+    if (max) {
+      const balHex = await rpcCall(rpcUrl, 'eth_getBalance', [wcAddress, 'latest']);
+      const ethBalance = BigInt(balHex);
+      // Reserve gas estimate (3x gasLimit * baseFee estimate)
+      let estGasLimit;
+      try {
+        const dummyEstimate = await rpcCall(rpcUrl, 'eth_estimateGas', [
+          { from: wcAddress, to, value: '0x1' },
+        ]);
+        estGasLimit = BigInt(dummyEstimate) * 120n / 100n;
+      } catch {
+        estGasLimit = 21000n;
+      }
+      const feeHistory = await rpcCall(rpcUrl, 'eth_feeHistory', [4, 'latest', [50]]);
+      const baseFee = BigInt(feeHistory.baseFeePerGas[feeHistory.baseFeePerGas.length - 1]);
+      const safeReserve = baseFee * 2n * estGasLimit * 3n;
+      if (ethBalance <= safeReserve) throw new Error(`Insufficient balance: ${ethBalance} wei (need > ${safeReserve} for gas)`);
+      const maxAmount = ethBalance - safeReserve;
+      amount = formatAmount(maxAmount, 18);
+      stderr(`  Max send: ${amount} ETH (reserved ${formatAmount(safeReserve, 18)} for gas)`);
+    }
+
+    const amountRaw = parseAmount(amount, 18);
+    txTo = to;
+    txValue = amountRaw.toString();
+    txData = '0x';
+  }
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      from: wcAddress,
+      to, amount, token, chain,
+    };
+  }
+
+  // Estimate gas instead of hardcoding — ERC-20 transfers with hooks may need more than 100k
+  let gasLimit;
+  try {
+    const estimateParams = { from: wcAddress, to: txTo };
+    if (txData && txData !== '0x') estimateParams.data = txData;
+    if (txValue && txValue !== '0') estimateParams.value = '0x' + BigInt(txValue).toString(16);
+    const gasEstimate = await rpcCall(rpcUrl, 'eth_estimateGas', [estimateParams]);
+    gasLimit = (BigInt(gasEstimate) * 120n / 100n).toString(); // 20% buffer
+  } catch {
+    gasLimit = token ? '100000' : '21000'; // fallback
+  }
+
+  stderr('  Sending transaction via WalletConnect...');
+  const wcResult = await sendTransactionViaWalletConnect({
+    to: txTo,
+    data: txData,
+    value: txValue,
+    gas: gasLimit,
+    chainId,
+  });
+
+  let txHash;
+  if (wcResult.txHash) {
+    txHash = wcResult.txHash;
+  } else if (wcResult.signedTransaction) {
+    txHash = await broadcastTransaction(wcResult.signedTransaction, chain);
+  } else {
+    throw new Error('No transaction hash or signed transaction returned from WalletConnect');
+  }
+
+  // Wait for confirmation
+  const confirmation = await waitForEvmConfirmation(rpcUrl, txHash);
+
+  return {
+    success: true,
+    transactionHash: txHash,
+    confirmed: confirmation.confirmed,
+    ...(confirmation.blockNumber ? { blockNumber: confirmation.blockNumber } : {}),
+    from: wcAddress,
+    to, amount, token, chain,
     explorer: getExplorerUrl(chain, txHash),
   };
 }

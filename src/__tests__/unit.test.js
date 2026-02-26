@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { validateAddress, validateTokenAddress, saveConfig, deleteConfig, getConfigFile, getConfigDir, ErrorCode, NansenError } from '../api.js';
 import { parseArgs, parseSort, formatValue } from '../cli.js';
+import { selectPaymentRequirement, buildEIP712TypedData, buildPaymentSignatureHeader } from '../walletconnect-x402.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -440,6 +441,112 @@ describe('Error Codes', () => {
       const result = validateAddress('0x28c6c06298d514db089934071355e5743bf21d60', 'ethereum');
       expect(result.valid).toBe(true);
       expect(result.code).toBeUndefined();
+    });
+  });
+});
+
+// =================== x402 Payment ===================
+
+describe('x402 Payment', () => {
+  const MOCK_REQUIREMENT = {
+    scheme: 'exact',
+    network: 'eip155:8453',
+    asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    amount: '10000',
+    payTo: '0xRecipient',
+    maxTimeoutSeconds: 300,
+    extra: {
+      name: 'USD Coin',
+      version: '2',
+    },
+  };
+
+  describe('selectPaymentRequirement', () => {
+    it('should select a requirement with scheme=exact and EIP-3009 support', () => {
+      const result = selectPaymentRequirement([MOCK_REQUIREMENT]);
+      expect(result).toEqual(MOCK_REQUIREMENT);
+    });
+
+    it('should return null for empty accepts array', () => {
+      expect(selectPaymentRequirement([])).toBeNull();
+    });
+
+    it('should return null when no requirement has extra.name', () => {
+      const noName = { ...MOCK_REQUIREMENT, extra: { version: '2' } };
+      expect(selectPaymentRequirement([noName])).toBeNull();
+    });
+
+    it('should return null when scheme is not exact', () => {
+      const wrongScheme = { ...MOCK_REQUIREMENT, scheme: 'streaming' };
+      expect(selectPaymentRequirement([wrongScheme])).toBeNull();
+    });
+
+    it('should return null for null/undefined input', () => {
+      expect(selectPaymentRequirement(null)).toBeNull();
+      expect(selectPaymentRequirement(undefined)).toBeNull();
+    });
+
+    it('should pick the first compatible requirement from multiple', () => {
+      const other = { scheme: 'streaming', extra: {} };
+      const result = selectPaymentRequirement([other, MOCK_REQUIREMENT]);
+      expect(result).toEqual(MOCK_REQUIREMENT);
+    });
+  });
+
+  describe('buildEIP712TypedData', () => {
+    it('should produce correct EIP-712 structure', () => {
+      const typedData = buildEIP712TypedData({
+        fromAddress: '0xSender',
+        requirement: MOCK_REQUIREMENT,
+      });
+
+      expect(typedData.primaryType).toBe('TransferWithAuthorization');
+      expect(typedData.domain.name).toBe('USD Coin');
+      expect(typedData.domain.version).toBe('2');
+      expect(typedData.domain.chainId).toBe(8453);
+      expect(typedData.domain.verifyingContract).toBe('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913');
+      expect(typedData.message.from).toBe('0xSender');
+      expect(typedData.message.to).toBe('0xRecipient');
+      expect(typedData.message.value).toBe('10000'); // from amount field
+      expect(typedData.message.validAfter).toBeGreaterThan(0);
+      expect(typedData.message.validBefore).toBeGreaterThan(typedData.message.validAfter);
+      expect(typedData.message.nonce).toMatch(/^0x[0-9a-f]{64}$/);
+    });
+
+    it('should include all required EIP-712 types', () => {
+      const typedData = buildEIP712TypedData({
+        fromAddress: '0xSender',
+        requirement: MOCK_REQUIREMENT,
+      });
+
+      expect(typedData.types.EIP712Domain).toBeDefined();
+      expect(typedData.types.TransferWithAuthorization).toBeDefined();
+      expect(typedData.types.TransferWithAuthorization).toHaveLength(6);
+    });
+
+    it('should generate unique nonces', () => {
+      const td1 = buildEIP712TypedData({ fromAddress: '0xA', requirement: MOCK_REQUIREMENT });
+      const td2 = buildEIP712TypedData({ fromAddress: '0xA', requirement: MOCK_REQUIREMENT });
+      expect(td1.message.nonce).not.toBe(td2.message.nonce);
+    });
+  });
+
+  describe('buildPaymentSignatureHeader', () => {
+    it('should produce valid base64 JSON with x402Version and required fields', () => {
+      const header = buildPaymentSignatureHeader({
+        signature: '0xSig',
+        authorization: { from: '0xA', to: '0xB', value: '100', validAfter: 0, validBefore: 999, nonce: '0x123' },
+        resource: { url: 'https://api.example.com/test', description: 'Test', mimeType: '' },
+        accepted: MOCK_REQUIREMENT,
+      });
+
+      const decoded = JSON.parse(atob(header));
+      expect(decoded.x402Version).toBe(2);
+      expect(decoded.resource.url).toBe('https://api.example.com/test');
+      expect(decoded.accepted.scheme).toBe('exact');
+      expect(decoded.payload.signature).toBe('0xSig');
+      expect(decoded.payload.authorization.from).toBe('0xA');
+      expect(decoded.payload.authorization.to).toBe('0xB');
     });
   });
 });
