@@ -28,16 +28,16 @@ nansen research smart-money netflow --chain solana --limit 10
 # Token screener — trending tokens
 nansen research token screener --chain solana --timeframe 24h --smart-money --limit 20
 
-# Trade — get quote then execute
-nansen trade quote --chain solana --from <from_addr> --to <to_addr> --amount <base_units>
+# Trade — quote then execute
+nansen trade quote --chain solana --from <sell_token> --to <buy_token> --amount <base_units>
 nansen trade execute --quote <quote-id>
 
 # Create a wallet
 nansen wallet create                                      # interactive
 NANSEN_WALLET_PASSWORD="pass" nansen wallet create        # non-interactive
 
-# Stuck? Discover all commands, options, and return fields
-nansen schema --pretty
+# Discover all commands, options, and return fields
+nansen schema
 ```
 
 ## Setup
