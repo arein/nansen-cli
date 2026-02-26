@@ -218,7 +218,9 @@ nansen schema --pretty
 
 ## Supported Chains
 
-`solana`, `ethereum`, `base`, `bnb`, `arbitrum`, `polygon`, `optimism`, `avalanche`, `linea`, `scroll`, `mantle`, `ronin`, `sei`, `plasma`, `sonic`, `monad`, `hyperevm`, `iotaevm`
+**Research:** `solana`, `ethereum`, `base`, `bnb`, `arbitrum`, `polygon`, `optimism`, `avalanche`, `linea`, `scroll`, `mantle`, `ronin`, `sei`, `plasma`, `sonic`, `monad`, `hyperevm`, `iotaevm`
+
+**Trading & x402:** `solana`, `base`
 
 ## Gotchas
 
