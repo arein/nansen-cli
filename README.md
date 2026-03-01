@@ -9,7 +9,7 @@
 
 ```bash
 npm install -g nansen-cli
-# or: npx nansen-cli help
+npx skills add nansen-ai/nansen-cli  # agent skill files (optional, for AI coding agents)
 ```
 
 ## Auth
