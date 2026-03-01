@@ -24,6 +24,42 @@ npm install
 npm link
 ```
 
+## AI Agent Skills
+
+Skills provide scoped, agent-optimised documentation per command group — making it easier for AI agents to discover and use the right commands without loading the full reference.
+
+### Install Skills
+
+```bash
+# Install all skills
+npx skills add nansen-ai/nansen-cli
+
+# Install a specific skill
+npx skills add nansen-ai/nansen-cli --skill nansen-search
+```
+
+> Powered by [vercel/skills.sh](https://github.com/vercel/skills.sh) — the open-source CLI for installing agent skills.
+
+This adds 7 skill files to your agent's context:
+
+| Skill | Use when... |
+|-------|-------------|
+| `nansen-token` | Researching a token, checking holders, screening trending tokens |
+| `nansen-smart-money` | Finding what smart money is buying/selling |
+| `nansen-profiler` | Analysing a specific wallet address |
+| `nansen-trade` | Buying or selling a token via DEX swap |
+| `nansen-wallet` | Creating a wallet or sending tokens |
+| `nansen-perp` | Checking Hyperliquid perp markets or top traders |
+| `nansen-search` | Finding a token address from a name |
+
+Skills live in `skills/<name>/SKILL.md` in this repo. Each file includes:
+- `allowed-tools: Bash` — agents know they only need bash
+- `Use when` description — enables routing without reading the full doc
+- Bash examples with agent patterns (JSON output, field selection)
+- Exit codes for retry logic
+
+> **Tip:** If skills aren't installed, `nansen --help` will remind you with the install command.
+
 ## Configuration
 
 ### For AI Agents (Recommended)
