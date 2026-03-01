@@ -703,7 +703,7 @@ export class NansenAPI {
   }
 
   async addressLabels(params = {}) {
-    const { address, chain = 'ethereum', pagination = { page: 1, recordsPerPage: 100 } } = params;
+    const { address, chain = 'ethereum', pagination = { page: 1, per_page: 100 } } = params;
     if (address) {
       const validation = validateAddress(address, chain);
       if (!validation.valid) throw new NansenError(validation.error, validation.code);
@@ -814,7 +814,7 @@ export class NansenAPI {
   }
 
   async addressPnlSummary(params = {}) {
-    const { address, chain = 'ethereum', orderBy, pagination, days = 30 } = params;
+    const { address, chain = 'ethereum', orderBy, days = 30 } = params;
     if (address) {
       const validation = validateAddress(address, chain);
       if (!validation.valid) throw new NansenError(validation.error, validation.code);
@@ -823,8 +823,7 @@ export class NansenAPI {
       address,
       chain,
       date: buildDateRange(days),
-      order_by: orderBy,
-      pagination
+      order_by: orderBy
     });
   }
 
