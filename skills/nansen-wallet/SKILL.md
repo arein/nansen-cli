@@ -13,7 +13,7 @@ allowed-tools: Bash
 nansen wallet create
 
 # Non-interactive (for agents)
-NANSEN_WALLET_PASSWORD="pass" nansen wallet create
+NANSEN_WALLET_PASSWORD="<your-password>" nansen wallet create
 ```
 
 ## List
@@ -41,7 +41,7 @@ nansen wallet send --to <addr> --amount 1.5 --chain base --wallet walletconnect
 ```bash
 nansen wallet create                        # Generate EVM + Solana keypair
 # Fund the EVM address with USDC on Base (~$0.50 minimum)
-export NANSEN_WALLET_PASSWORD="your-pass"   # Skip interactive prompt
+export NANSEN_WALLET_PASSWORD="<your-password>"   # Skip interactive prompt
 # Done — CLI auto-pays $0.01-$0.05 per call
 ```
 

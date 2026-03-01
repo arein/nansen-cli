@@ -26,16 +26,6 @@ nansen research perp screener --sort open_interest_usd:desc --limit 10 --output 
 nansen research perp leaderboard --days 7 --limit 20
 ```
 
-## Portfolio & Points
-
-```bash
-# DeFi portfolio for a wallet
-nansen research portfolio defi --wallet <addr>
-
-# Nansen points leaderboard
-nansen research points leaderboard --tier green --limit 20
-```
-
 ## Flags
 
 | Flag | Purpose |
@@ -43,7 +33,6 @@ nansen research points leaderboard --tier green --limit 20
 | `--sort field:dir` | Sort (e.g. `volume_usd:desc`) |
 | `--limit` | Number of results |
 | `--days` | Lookback period |
-| `--tier` | Points tier filter |
 | `--output json` | JSON output |
 | `--fields a,b` | Select fields |
 
