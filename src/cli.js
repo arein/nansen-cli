@@ -1195,7 +1195,7 @@ WALLET:
                     Defaults to the default local wallet if omitted.
 
 SYMBOLS:
-  Common tokens resolve automatically: SOL, ETH, BNB, USDC, USDT, WETH, WBNB
+  Common tokens resolve automatically: SOL, ETH, USDC, USDT, WETH
   Raw addresses are also accepted.`);
       return;
     }

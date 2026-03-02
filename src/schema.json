@@ -1406,8 +1406,8 @@
           "options": {
             "chain": {
               "type": "string",
-              "default": "ethereum",
-              "description": "Blockchain"
+              "default": "base",
+              "description": "Blockchain (solana or base)"
             },
             "from": {
               "type": "string",
@@ -1435,8 +1435,8 @@
           "options": {
             "chain": {
               "type": "string",
-              "default": "ethereum",
-              "description": "Blockchain"
+              "default": "base",
+              "description": "Blockchain (solana or base)"
             },
             "wallet": {
               "type": "string",
