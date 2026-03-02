@@ -265,7 +265,7 @@
                 },
                 "date": {
                   "type": "string",
-                  "required": true,
+                  "required": false,
                   "description": "Date or date range"
                 },
                 "limit": {
@@ -792,7 +792,7 @@
                 },
                 "date": {
                   "type": "string",
-                  "required": true,
+                  "required": false,
                   "description": "Date or date range"
                 },
                 "days": {
@@ -909,7 +909,7 @@
                 },
                 "date": {
                   "type": "string",
-                  "required": true,
+                  "required": false,
                   "description": "Date or date range"
                 },
                 "days": {
