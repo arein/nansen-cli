@@ -828,6 +828,8 @@ describe('WalletConnect quote support', () => {
     expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(false);
     // Wallet address should show the Solana address
     expect(logs.some(l => l.includes('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'))).toBe(true);
+    // Should have requested the Solana address specifically
+    expect(wcTrading.getWalletConnectAddress).toHaveBeenCalledWith('solana');
 
     global.fetch = originalFetch;
     vi.restoreAllMocks();

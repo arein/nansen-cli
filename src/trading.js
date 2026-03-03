@@ -975,8 +975,8 @@ EXAMPLES:
           const quoteWallet = quoteData.response?.quotes?.[0]?.transaction?.from
             || quoteData.response?.metadata?.userWalletAddress;
           if (quoteWallet && (chainType === 'solana'
-            ? wcAddress !== quoteWallet
-            : wcAddress.toLowerCase() !== quoteWallet.toLowerCase())) {
+            ? wcAddress.trim() !== quoteWallet.trim()
+            : wcAddress.toLowerCase().trim() !== quoteWallet.toLowerCase().trim())) {
             log(`Connected wallet (${wcAddress}) doesn't match quote. Get a new quote with --wallet walletconnect`);
             exit(1);
             return;
@@ -1184,7 +1184,13 @@ EXAMPLES:
                     throw new Error(`Invalid Ed25519 signature length: expected 64 bytes, got ${sigBytes.length}`);
                   }
                   const txBytes = Buffer.from(txBase64, 'base64');
-                  const { size: sigCountSize } = readCompactU16(txBytes, 0);
+                  const { value: sigCount, size: sigCountSize } = readCompactU16(txBytes, 0);
+                  if (sigCount < 1) {
+                    throw new Error('Transaction has no signature slots');
+                  }
+                  if (txBytes.length < sigCountSize + 64) {
+                    throw new Error(`Transaction buffer too small for signature: need ${sigCountSize + 64}, got ${txBytes.length}`);
+                  }
                   sigBytes.copy(txBytes, sigCountSize);
                   signedTransaction = txBytes.toString('base64');
                 } else {
