@@ -8,10 +8,10 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { exportWallet, getWalletConfig, showWallet, listWallets } from './wallet.js';
+import { base58Encode, exportWallet, getWalletConfig, showWallet, listWallets } from './wallet.js';
 import { base58Decode } from './transfer.js';
 import { keccak256, signSecp256k1, rlpEncode } from './crypto.js';
-import { getWalletConnectAddress, sendTransactionViaWalletConnect, sendApprovalViaWalletConnect } from './walletconnect-trading.js';
+import { getWalletConnectAddress, sendTransactionViaWalletConnect, sendSolanaTransactionViaWalletConnect, sendApprovalViaWalletConnect } from './walletconnect-trading.js';
 import { retrievePassword } from './keychain.js';
 
 // ============= Constants =============
@@ -746,7 +746,7 @@ OPTIONS:
   --from <symbol|address>   Input token (symbol like SOL, USDC or address)
   --to <symbol|address>     Output token (symbol like USDC, ETH or address)
   --amount <units>          Amount in BASE UNITS (e.g. lamports, wei)
-  --wallet <name>           Wallet name (default: default wallet). Use "walletconnect" or "wc" for WalletConnect (EVM only).
+  --wallet <name>           Wallet name (default: default wallet). Use "walletconnect" or "wc" for WalletConnect.
   --slippage <pct>          Slippage as decimal (e.g. 0.03 for 3%). Default: 0.03
   --auto-slippage           Enable auto slippage calculation
   --max-auto-slippage <pct> Max auto slippage when auto-slippage enabled
@@ -778,12 +778,7 @@ EXAMPLES:
         let walletProvider = 'local';
         let privyWalletIds = null;
         if (isWalletConnect) {
-          if (chainType !== 'evm') {
-            log('WalletConnect is only supported for EVM chains');
-            exit(1);
-            return;
-          }
-          walletAddress = await getWalletConnectAddress();
+          walletAddress = await getWalletConnectAddress(chainType);
           if (!walletAddress) {
             log('No WalletConnect session active. Run: walletconnect connect');
             exit(1);
@@ -970,12 +965,7 @@ EXAMPLES:
           exported = exportWallet(effectiveWalletName, password);
         } else {
           // Verify WalletConnect session is still active and address matches quote
-          if (chainType !== 'evm') {
-            log('WalletConnect is only supported for EVM chains');
-            exit(1);
-            return;
-          }
-          const wcAddress = await getWalletConnectAddress();
+          const wcAddress = await getWalletConnectAddress(chainType);
           if (!wcAddress) {
             log('No WalletConnect session active. Run: walletconnect connect');
             exit(1);
@@ -984,7 +974,9 @@ EXAMPLES:
           // Check address matches the one used during quoting
           const quoteWallet = quoteData.response?.quotes?.[0]?.transaction?.from
             || quoteData.response?.metadata?.userWalletAddress;
-          if (quoteWallet && wcAddress.toLowerCase() !== quoteWallet.toLowerCase()) {
+          if (quoteWallet && (chainType === 'solana'
+            ? wcAddress !== quoteWallet
+            : wcAddress.toLowerCase() !== quoteWallet.toLowerCase())) {
             log(`Connected wallet (${wcAddress}) doesn't match quote. Get a new quote with --wallet walletconnect`);
             exit(1);
             return;
@@ -1176,13 +1168,37 @@ EXAMPLES:
               if (typeof txBase64 === 'object' && txBase64.data) {
                 txBase64 = base58Decode(txBase64.data).toString('base64');
               }
-              log('  Signing Solana transaction...');
-              signedTransaction = signSolanaTransaction(txBase64, exported.solana.privateKey);
+
+              if (isWalletConnect) {
+                // Solana via WalletConnect: convert base64 → base58 for WC protocol
+                log('  Signing Solana transaction via WalletConnect...');
+                const txBase58 = base58Encode(Buffer.from(txBase64, 'base64'));
+                const wcResult = await sendSolanaTransactionViaWalletConnect(txBase58);
+
+                if (wcResult.signedTransaction) {
+                  signedTransaction = base58Decode(wcResult.signedTransaction).toString('base64');
+                } else if (wcResult.signature) {
+                  // Wallet returned raw Ed25519 sig → inject into unsigned tx
+                  const sigBytes = base58Decode(wcResult.signature);
+                  if (sigBytes.length !== 64) {
+                    throw new Error(`Invalid Ed25519 signature length: expected 64 bytes, got ${sigBytes.length}`);
+                  }
+                  const txBytes = Buffer.from(txBase64, 'base64');
+                  const { size: sigCountSize } = readCompactU16(txBytes, 0);
+                  sigBytes.copy(txBytes, sigCountSize);
+                  signedTransaction = txBytes.toString('base64');
+                } else {
+                  throw new Error('WalletConnect returned neither signedTransaction nor signature');
+                }
+              } else {
+                log('  Signing Solana transaction...');
+                signedTransaction = signSolanaTransaction(txBase64, exported.solana.privateKey);
+              }
               requestId = currentQuote.metadata?.requestId;
 
             } else if (isWalletConnect) {
               // EVM via WalletConnect: wallet signs and may broadcast
-              const wcAddress = await getWalletConnectAddress();
+              const wcAddress = await getWalletConnectAddress(chainType);
               const isNative = isNativeToken(currentQuote.inputMint);
 
               // Validate transaction.value (same checks as local wallet)

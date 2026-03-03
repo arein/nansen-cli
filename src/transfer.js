@@ -703,7 +703,7 @@ export async function sendTokens({ to, amount, chain, token = null, wallet = nul
 
   if (walletconnect) {
     if (chain === 'solana') {
-      throw new Error('WalletConnect is only supported for EVM chains');
+      throw new Error('WalletConnect Solana transfers are not yet supported. Use a local wallet for Solana transfers.');
     }
     return sendTokensViaWalletConnect({ to, amount, chain, token, max, dryRun });
   }
