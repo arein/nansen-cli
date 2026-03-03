@@ -116,6 +116,19 @@ describe('getWalletConnectAddress', () => {
     expect(address).toBeNull();
   });
 
+  it('rejects Solana devnet/testnet accounts (mainnet only)', async () => {
+    mockExecFile(JSON.stringify({
+      connected: true,
+      accounts: [
+        { chain: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1', address: 'DevnetAddr123' },
+        { chain: 'solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z', address: 'TestnetAddr456' },
+      ],
+    }));
+
+    const address = await getWalletConnectAddress('solana');
+    expect(address).toBeNull();
+  });
+
   it('returns first address when no chainType (backward compat)', async () => {
     mockExecFile(JSON.stringify({
       connected: true,
@@ -368,6 +381,14 @@ describe('sendSolanaTransactionViaWalletConnect', () => {
     mockExecFile('Some non-JSON output');
 
     await expect(sendSolanaTransactionViaWalletConnect('3Bxs3z...')).rejects.toThrow('No JSON output');
+  });
+
+  it('parses multi-line JSON output from walletconnect', async () => {
+    const multiLineJson = 'Connecting to wallet...\n{\n  "signedTransaction": "5K4Ld..."\n}';
+    mockExecFile(multiLineJson);
+
+    const result = await sendSolanaTransactionViaWalletConnect('3Bxs3z...');
+    expect(result).toEqual({ signedTransaction: '5K4Ld...' });
   });
 
   it('throws when unexpected response', async () => {

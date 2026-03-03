@@ -17,9 +17,22 @@ const SOLANA_MAINNET_CHAIN = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
  * The CLI may print status messages before the JSON result.
  */
 function parseWcJson(output) {
-  const jsonLine = output.split('\n').find(line => line.startsWith('{'));
-  if (!jsonLine) throw new Error('No JSON output from walletconnect send-transaction');
-  return JSON.parse(jsonLine);
+  const lines = output.split('\n');
+  const startIdx = lines.findIndex(l => l.trimStart().startsWith('{'));
+  if (startIdx === -1) throw new Error('No JSON output from walletconnect');
+
+  // Handle multi-line JSON: collect lines until braces balance
+  let braces = 0;
+  const jsonLines = [];
+  for (let i = startIdx; i < lines.length; i++) {
+    jsonLines.push(lines[i]);
+    for (const ch of lines[i]) {
+      if (ch === '{') braces++;
+      else if (ch === '}') braces--;
+    }
+    if (braces === 0) break;
+  }
+  return JSON.parse(jsonLines.join('\n'));
 }
 
 /**
@@ -38,7 +51,8 @@ export async function getWalletConnectAddress(chainType) {
     if (!accounts.length) return null;
 
     if (chainType === 'solana') {
-      const solAccount = accounts.find(a => a.chain?.startsWith('solana:'));
+      // Match Solana mainnet only — reject devnet/testnet to prevent wrong-network trades
+      const solAccount = accounts.find(a => a.chain === SOLANA_MAINNET_CHAIN);
       return solAccount?.address || null;
     }
     if (chainType === 'evm') {
@@ -134,6 +148,7 @@ export async function sendSolanaTransactionViaWalletConnect(txBase58, timeoutMs 
 
   if (result.signedTransaction) return { signedTransaction: result.signedTransaction };
   if (result.signature) return { signature: result.signature };
+  // Some wallets (e.g. Phantom) return 'transaction' instead of 'signedTransaction'
   if (result.transaction) return { signedTransaction: result.transaction };
 
   throw new Error('Unexpected response from walletconnect Solana sign');

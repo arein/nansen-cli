@@ -1172,17 +1172,28 @@ EXAMPLES:
               if (isWalletConnect) {
                 // Solana via WalletConnect: convert base64 → base58 for WC protocol
                 log('  Signing Solana transaction via WalletConnect...');
-                const txBase58 = base58Encode(Buffer.from(txBase64, 'base64'));
+                let txBase58;
+                try {
+                  txBase58 = base58Encode(Buffer.from(txBase64, 'base64'));
+                } catch (err) {
+                  throw new Error(`Failed to encode transaction for WalletConnect: ${err.message}`);
+                }
                 const wcResult = await sendSolanaTransactionViaWalletConnect(txBase58);
 
                 if (wcResult.signedTransaction) {
                   signedTransaction = base58Decode(wcResult.signedTransaction).toString('base64');
                 } else if (wcResult.signature) {
                   // Wallet returned raw Ed25519 sig → inject into unsigned tx
-                  const sigBytes = base58Decode(wcResult.signature);
+                  let sigBytes;
+                  try {
+                    sigBytes = base58Decode(wcResult.signature);
+                  } catch (err) {
+                    throw new Error(`Invalid base58 signature from WalletConnect: ${err.message}`);
+                  }
                   if (sigBytes.length !== 64) {
                     throw new Error(`Invalid Ed25519 signature length: expected 64 bytes, got ${sigBytes.length}`);
                   }
+                  // Buffer.from() creates a new buffer — safe to mutate in-place
                   const txBytes = Buffer.from(txBase64, 'base64');
                   const { value: sigCount, size: sigCountSize } = readCompactU16(txBytes, 0);
                   if (sigCount < 1) {
@@ -1191,6 +1202,7 @@ EXAMPLES:
                   if (txBytes.length < sigCountSize + 64) {
                     throw new Error(`Transaction buffer too small for signature: need ${sigCountSize + 64}, got ${txBytes.length}`);
                   }
+                  // Inject into the first signature slot (feePayer)
                   sigBytes.copy(txBytes, sigCountSize);
                   signedTransaction = txBytes.toString('base64');
                 } else {
