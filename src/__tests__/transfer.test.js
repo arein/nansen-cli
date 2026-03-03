@@ -518,13 +518,13 @@ describe('sendTokens via WalletConnect', () => {
     vi.clearAllMocks();
   });
 
-  test('rejects Solana + walletconnect', async () => {
+  test('rejects Solana + walletconnect for transfers with clear message', async () => {
     await expect(sendTokens({
       to: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM',
       amount: '0.5',
       chain: 'solana',
       walletconnect: true,
-    })).rejects.toThrow('WalletConnect is only supported for EVM chains');
+    })).rejects.toThrow('WalletConnect Solana transfers are not yet supported. Use a local wallet for Solana transfers.');
   });
 
   test('errors when no WalletConnect session', async () => {

@@ -782,8 +782,25 @@ describe('WalletConnect quote support', () => {
     expect(loaded.signerType).toBe('local');
   });
 
-  it('should reject Solana + walletconnect for quote', async () => {
-    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+  it('should allow Solana + walletconnect for quote', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM');
+
+    // Mock global fetch for the quote API call
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        quotes: [{
+          aggregator: 'jupiter',
+          inputMint: 'So11111111111111111111111111111111111111112',
+          outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+          inAmount: '1000000000',
+          outAmount: '150000000',
+          transaction: 'AQAAAA==',
+        }],
+      }),
+    }));
 
     const logs = [];
     let exitCalled = false;
@@ -800,9 +817,12 @@ describe('WalletConnect quote support', () => {
       wallet: 'walletconnect',
     });
 
-    expect(exitCalled).toBe(true);
-    expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(true);
+    // Should NOT have rejected — it should have proceeded to fetch a quote
+    expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(false);
+    // Wallet address should show the Solana address
+    expect(logs.some(l => l.includes('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'))).toBe(true);
 
+    global.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -924,26 +944,62 @@ describe('WalletConnect execute support', () => {
     vi.restoreAllMocks();
   });
 
-  it('should reject Solana + walletconnect for execute', async () => {
+  it('should allow Solana + walletconnect for execute', async () => {
+    vi.spyOn(wcTrading, 'getWalletConnectAddress').mockResolvedValue('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM');
+    vi.spyOn(wcTrading, 'sendSolanaTransactionViaWalletConnect').mockResolvedValue({ signedTransaction: '5K4Ld...' });
+
+    // Mock global fetch for executeTransaction API call
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: () => Promise.resolve({
+        status: 'Success',
+        txHash: '5K4LdSignedTx...',
+      }),
+    }));
+
+    // Build a minimal valid Solana transaction (1 sig slot, minimal message)
+    // CompactU16(1) = [0x01], then 64 zero bytes for the signature, then message bytes
+    const sigCount = Buffer.from([0x01]);
+    const emptySig = Buffer.alloc(64);
+    const messageBytes = Buffer.from([
+      0x01, 0x00, 0x01, // header: 1 signer, 0 readonly signed, 1 readonly unsigned
+      0x02, // 2 account keys
+      ...Buffer.alloc(32), // account key 1
+      ...Buffer.alloc(32), // account key 2
+      ...Buffer.alloc(32), // recent blockhash
+      0x01, // 1 instruction
+      0x01, // program ID index
+      0x01, 0x00, // 1 account index: [0]
+      0x04, 0x02, 0x00, 0x00, 0x00, // data: transfer instruction
+    ]);
+    const txBytes = Buffer.concat([sigCount, emptySig, messageBytes]);
+    const txBase64 = txBytes.toString('base64');
+
     const quoteId = saveQuote({
       success: true,
       quotes: [{
-        aggregator: 'test',
-        transaction: 'AQAAAA==', // base64 Solana tx
+        aggregator: 'jupiter',
+        transaction: txBase64,
       }],
     }, 'solana', 'walletconnect');
 
     const logs = [];
-    let exitCalled = false;
     const cmds = buildTradingCommands({
       log: (msg) => logs.push(msg),
-      exit: () => { exitCalled = true; },
+      exit: () => {},
     });
+
+    delete process.env.NANSEN_WALLET_PASSWORD;
 
     await cmds.execute([], null, {}, { quote: quoteId });
 
-    expect(exitCalled).toBe(true);
-    expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(true);
+    // Should have used WalletConnect path
+    expect(logs.some(l => l.includes('WalletConnect'))).toBe(true);
+    expect(logs.some(l => l.includes('WalletConnect is only supported for EVM chains'))).toBe(false);
+
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 });
 

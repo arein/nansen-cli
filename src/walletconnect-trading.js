@@ -5,21 +5,48 @@
  * (hardware wallets, mobile wallets) instead of local key storage.
  * Uses the walletconnect CLI binary (subprocess-based, same as x402).
  *
- * EVM only — Solana via WalletConnect is not supported.
+ * Supports EVM chains and Solana (trading only).
  */
 
 import { wcExec } from './walletconnect-exec.js';
 
+const SOLANA_MAINNET_CHAIN = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+
+/**
+ * Extract the first JSON line from walletconnect CLI output.
+ * The CLI may print status messages before the JSON result.
+ */
+function parseWcJson(output) {
+  const jsonLine = output.split('\n').find(line => line.startsWith('{'));
+  if (!jsonLine) throw new Error('No JSON output from walletconnect send-transaction');
+  return JSON.parse(jsonLine);
+}
+
 /**
  * Get the address of the connected WalletConnect wallet.
  * Returns the first account address, or null if not connected / binary missing.
+ *
+ * @param {string} [chainType] - Optional: 'evm' or 'solana'. Filters accounts by chain prefix.
+ *   No arg = first account (backward compat).
  */
-export async function getWalletConnectAddress() {
+export async function getWalletConnectAddress(chainType) {
   try {
     const output = await wcExec('walletconnect', ['whoami', '--json'], 3000);
     const data = JSON.parse(output);
     if (data.connected === false) return null;
-    return data.accounts?.[0]?.address || null;
+    const accounts = data.accounts || [];
+    if (!accounts.length) return null;
+
+    if (chainType === 'solana') {
+      const solAccount = accounts.find(a => a.chain?.startsWith('solana:'));
+      return solAccount?.address || null;
+    }
+    if (chainType === 'evm') {
+      const evmAccount = accounts.find(a => a.chain?.startsWith('eip155:'));
+      return evmAccount?.address || null;
+    }
+    // No filter — return first account address (backward compat)
+    return accounts[0]?.address || null;
   } catch {
     return null;
   }
@@ -50,13 +77,8 @@ export async function sendTransactionViaWalletConnect(txData, timeoutMs = 120000
   };
 
   const output = await wcExec('walletconnect', ['send-transaction', JSON.stringify(payload)], timeoutMs);
+  const result = parseWcJson(output);
 
-  // walletconnect may print status messages before the JSON line — extract JSON only
-  const jsonLine = output.split('\n').find(line => line.startsWith('{'));
-  if (!jsonLine) throw new Error('No JSON output from walletconnect send-transaction');
-  const result = JSON.parse(jsonLine);
-
-  // The CLI returns { transactionHash: "0x..." }
   if (result.transactionHash) return { txHash: result.transactionHash };
   if (result.txHash) return { txHash: result.txHash };
   if (result.signedTransaction) return { signedTransaction: result.signedTransaction };
@@ -88,4 +110,31 @@ export async function sendApprovalViaWalletConnect(tokenAddress, spenderAddress,
     gas: '100000',
     chainId,
   });
+}
+
+/**
+ * Sign a Solana transaction via WalletConnect.
+ *
+ * The wallet signs the transaction and returns either:
+ * - { signedTransaction: "<base58>" } — full signed transaction
+ * - { signature: "<base58>" } — raw Ed25519 signature only
+ *
+ * @param {string} txBase58 - Base58-encoded Solana transaction
+ * @param {number} [timeoutMs=120000] - Timeout for user approval
+ * @returns {{ signedTransaction?: string, signature?: string }}
+ */
+export async function sendSolanaTransactionViaWalletConnect(txBase58, timeoutMs = 120000) {
+  const payload = {
+    transaction: txBase58,
+    chainId: SOLANA_MAINNET_CHAIN,
+  };
+
+  const output = await wcExec('walletconnect', ['send-transaction', JSON.stringify(payload)], timeoutMs);
+  const result = parseWcJson(output);
+
+  if (result.signedTransaction) return { signedTransaction: result.signedTransaction };
+  if (result.signature) return { signature: result.signature };
+  if (result.transaction) return { signedTransaction: result.transaction };
+
+  throw new Error('Unexpected response from walletconnect Solana sign');
 }

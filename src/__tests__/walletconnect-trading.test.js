@@ -16,6 +16,7 @@ import { execFile } from 'child_process';
 import {
   getWalletConnectAddress,
   sendTransactionViaWalletConnect,
+  sendSolanaTransactionViaWalletConnect,
   sendApprovalViaWalletConnect,
 } from '../walletconnect-trading.js';
 
@@ -75,6 +76,57 @@ describe('getWalletConnectAddress', () => {
 
     const address = await getWalletConnectAddress();
     expect(address).toBeNull();
+  });
+
+  it('returns Solana address when chainType is solana', async () => {
+    mockExecFile(JSON.stringify({
+      connected: true,
+      accounts: [
+        { chain: 'eip155:1', address: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4' },
+        { chain: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', address: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM' },
+      ],
+    }));
+
+    const address = await getWalletConnectAddress('solana');
+    expect(address).toBe('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM');
+  });
+
+  it('returns EVM address when chainType is evm', async () => {
+    mockExecFile(JSON.stringify({
+      connected: true,
+      accounts: [
+        { chain: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', address: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM' },
+        { chain: 'eip155:1', address: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4' },
+      ],
+    }));
+
+    const address = await getWalletConnectAddress('evm');
+    expect(address).toBe('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
+  });
+
+  it('returns null when chainType is solana but no Solana account', async () => {
+    mockExecFile(JSON.stringify({
+      connected: true,
+      accounts: [
+        { chain: 'eip155:1', address: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4' },
+      ],
+    }));
+
+    const address = await getWalletConnectAddress('solana');
+    expect(address).toBeNull();
+  });
+
+  it('returns first address when no chainType (backward compat)', async () => {
+    mockExecFile(JSON.stringify({
+      connected: true,
+      accounts: [
+        { chain: 'eip155:1', address: '0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4' },
+        { chain: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', address: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM' },
+      ],
+    }));
+
+    const address = await getWalletConnectAddress();
+    expect(address).toBe('0x742d35Cc6bF4F3f4e0e3a8DD7e37ff4e4Be4E4B4');
   });
 });
 
@@ -263,5 +315,77 @@ describe('sendApprovalViaWalletConnect', () => {
 
     const payload = JSON.parse(execFile.mock.calls[0][1][1]);
     expect(payload.gas).toBe('0x186a0'); // 100000 in hex
+  });
+});
+
+// ============= sendSolanaTransactionViaWalletConnect =============
+
+describe('sendSolanaTransactionViaWalletConnect', () => {
+  it('sends correct payload and returns signedTransaction', async () => {
+    mockExecFile(JSON.stringify({ signedTransaction: '5K4Ld...' }));
+
+    const result = await sendSolanaTransactionViaWalletConnect('3Bxs3z...');
+
+    expect(result).toEqual({ signedTransaction: '5K4Ld...' });
+
+    // Verify the command arguments
+    expect(execFile).toHaveBeenCalledWith(
+      'walletconnect',
+      ['send-transaction', expect.any(String)],
+      expect.objectContaining({ timeout: 120000 }),
+      expect.any(Function),
+    );
+
+    // Verify the JSON payload
+    const payload = JSON.parse(execFile.mock.calls[0][1][1]);
+    expect(payload.transaction).toBe('3Bxs3z...');
+    expect(payload.chainId).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
+  });
+
+  it('returns signature when wallet returns signature only', async () => {
+    mockExecFile(JSON.stringify({ signature: '4vJ9...' }));
+
+    const result = await sendSolanaTransactionViaWalletConnect('3Bxs3z...');
+
+    expect(result).toEqual({ signature: '4vJ9...' });
+  });
+
+  it('returns signedTransaction when wallet returns transaction field', async () => {
+    mockExecFile(JSON.stringify({ transaction: '5abc...' }));
+
+    const result = await sendSolanaTransactionViaWalletConnect('3Bxs3z...');
+
+    expect(result).toEqual({ signedTransaction: '5abc...' });
+  });
+
+  it('throws on timeout', async () => {
+    mockExecFile('', new Error('Command timed out'));
+
+    await expect(sendSolanaTransactionViaWalletConnect('3Bxs3z...')).rejects.toThrow('Command timed out');
+  });
+
+  it('throws when no JSON output', async () => {
+    mockExecFile('Some non-JSON output');
+
+    await expect(sendSolanaTransactionViaWalletConnect('3Bxs3z...')).rejects.toThrow('No JSON output');
+  });
+
+  it('throws when unexpected response', async () => {
+    mockExecFile(JSON.stringify({ unexpected: true }));
+
+    await expect(sendSolanaTransactionViaWalletConnect('3Bxs3z...')).rejects.toThrow('Unexpected response');
+  });
+
+  it('uses custom timeout', async () => {
+    mockExecFile(JSON.stringify({ signedTransaction: '5K4Ld...' }));
+
+    await sendSolanaTransactionViaWalletConnect('3Bxs3z...', 60000);
+
+    expect(execFile).toHaveBeenCalledWith(
+      'walletconnect',
+      expect.any(Array),
+      expect.objectContaining({ timeout: 60000 }),
+      expect.any(Function),
+    );
   });
 });
