@@ -66,6 +66,15 @@ nansen trade execute --quote "$QUOTE_ID"
 | `--quote` | Quote ID for execute |
 | `--no-simulate` | Skip pre-broadcast simulation |
 
+## Environment Variables
+
+| Var | Purpose |
+|-----|---------|
+| `NANSEN_WALLET_PASSWORD` | **Required for `trade execute`.** Wallet encryption password — persisted in `~/.nansen/.env`. Source before executing: `source ~/.nansen/.env && nansen trade execute ...` |
+| `NANSEN_API_KEY` | API key (also set via `nansen login`) |
+
+> **Agents:** Never hold a wallet password only in session memory. If `NANSEN_WALLET_PASSWORD` is not in `~/.nansen/.env`, follow the setup flow in the nansen-wallet skill Password Policy to generate and persist one before proceeding.
+
 ## Notes
 
 - Quotes expire after ~1 hour. If execute fails, get a fresh quote.
