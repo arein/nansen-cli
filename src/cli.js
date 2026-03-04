@@ -830,10 +830,10 @@ export function buildCommands(deps = {}) {
         const filtered = [];
         let include = false;
         for (const line of lines) {
-          // Match ## [x.y.z] headers
-          const match = line.match(/^## \[(\d+\.\d+\.\d+)\]/);
+          // Match ## [x.y.z] (Keep a Changelog format) or ## x.y.z (changeset format)
+          const match = line.match(/^## \[(\d+\.\d+\.\d+)\]|^## (\d+\.\d+\.\d+)\b/);
           if (match) {
-            const ver = match[1];
+            const ver = match[1] || match[2];
             // Compare: include versions >= since, stop at versions < since
             if (compareSemver(ver, since) >= 0) {
               include = true;
