@@ -1176,7 +1176,7 @@ EXAMPLES:
                 try {
                   txBase58 = base58Encode(Buffer.from(txBase64, 'base64'));
                 } catch (err) {
-                  throw new Error(`Failed to encode transaction for WalletConnect: ${err.message}`);
+                  throw new Error(`Failed to encode transaction for WalletConnect: ${err.message}`, { cause: err });
                 }
                 const wcResult = await sendSolanaTransactionViaWalletConnect(txBase58);
 
@@ -1188,7 +1188,7 @@ EXAMPLES:
                   try {
                     sigBytes = base58Decode(wcResult.signature);
                   } catch (err) {
-                    throw new Error(`Invalid base58 signature from WalletConnect: ${err.message}`);
+                    throw new Error(`Invalid base58 signature from WalletConnect: ${err.message}`, { cause: err });
                   }
                   if (sigBytes.length !== 64) {
                     throw new Error(`Invalid Ed25519 signature length: expected 64 bytes, got ${sigBytes.length}`);
