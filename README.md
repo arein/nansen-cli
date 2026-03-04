@@ -30,7 +30,7 @@ nansen wallet <subcommand> [options]
 nansen schema [command] [--pretty]    # full command reference (no API key needed)
 ```
 
-**Research categories:** `smart-money` (`sm`), `token` (`tgm`), `profiler` (`prof`), `portfolio` (`port`), `search`, `perp`, `points`
+**Research categories:** `smart-money` (`sm`), `token` (`tgm`), `profiler` (`prof`), `portfolio` (`port`), `prediction-market` (`pm`), `search`, `perp`, `points`
 
 **Trade:** `quote`, `execute` — DEX swaps on Solana and Base.
 

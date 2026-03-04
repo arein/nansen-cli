@@ -55,15 +55,26 @@ export function filterFields(data, fields) {
     const filtered = {};
     for (const key of Object.keys(obj)) {
       if (fieldSet.has(key)) {
+        // Explicitly requested — include as-is
         filtered[key] = obj[key];
       } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        // Recurse into nested objects/arrays
-        const nested = filterObject(obj[key]);
-        // Only include if it has content
-        if (nested !== null && nested !== undefined) {
-          if (Array.isArray(nested) && nested.length > 0) {
-            filtered[key] = nested;
-          } else if (!Array.isArray(nested) && Object.keys(nested).length > 0) {
+        if (Array.isArray(obj[key])) {
+          // Only recurse into arrays whose elements are plain objects.
+          // Primitive arrays (e.g. tags: ["a","b"]) are dropped unless the
+          // key was explicitly requested (handled above).
+          const hasObjectElements = obj[key].length > 0 &&
+            typeof obj[key][0] === 'object' && obj[key][0] !== null;
+          if (hasObjectElements) {
+            const nested = obj[key].map(item => filterObject(item))
+              .filter(item => Object.keys(item).length > 0);
+            if (nested.length > 0) {
+              filtered[key] = nested;
+            }
+          }
+        } else {
+          // Plain object — always recurse in case it wraps requested fields
+          const nested = filterObject(obj[key]);
+          if (nested !== null && nested !== undefined && Object.keys(nested).length > 0) {
             filtered[key] = nested;
           }
         }
@@ -1218,11 +1229,47 @@ export function buildCommands(deps = {}) {
       }
 
       return handlers[subcommand]();
+    },
+
+    'prediction-market': async (args, apiInstance, flags, options) => {
+      const subcommand = args[0] || 'help';
+      const marketId = options['market-id'];
+      const address = options.address;
+      const sortBy = options['sort-by'];
+      const query = options.query;
+      const status = options.status;
+      const sort = parseSort(options.sort);
+      const pagination = buildPagination(options);
+
+      const handlers = {
+        'ohlcv': () => apiInstance.pmOhlcv({ marketId, sort, pagination }),
+        'orderbook': () => apiInstance.pmOrderbook({ marketId, pagination }),
+        'top-holders': () => apiInstance.pmTopHolders({ marketId, sort, pagination }),
+        'trades-by-market': () => apiInstance.pmTradesByMarket({ marketId, pagination }),
+        'trades-by-address': () => apiInstance.pmTradesByAddress({ address, pagination }),
+        'market-screener': () => apiInstance.pmMarketScreener({ sortBy, query, status, pagination }),
+        'event-screener': () => apiInstance.pmEventScreener({ sortBy, query, status, pagination }),
+        'pnl-by-market': () => apiInstance.pmPnlByMarket({ marketId, pagination }),
+        'pnl-by-address': () => apiInstance.pmPnlByAddress({ address, pagination }),
+        'position-detail': () => apiInstance.pmPositionDetail({ marketId, pagination }),
+        'categories': () => apiInstance.pmCategories({ pagination }),
+        'help': () => ({
+          commands: ['ohlcv', 'orderbook', 'top-holders', 'trades-by-market', 'trades-by-address', 'market-screener', 'event-screener', 'pnl-by-market', 'pnl-by-address', 'position-detail', 'categories'],
+          description: 'Polymarket prediction market analytics',
+          example: 'nansen research pm market-screener --sort-by volume_24hr --limit 20'
+        })
+      };
+
+      if (!handlers[subcommand]) {
+        throw new NansenError(`Unknown subcommand: ${subcommand}. Available: ${Object.keys(handlers).filter(k => k !== 'help').join(', ')}`, ErrorCode.UNKNOWN);
+      }
+
+      return handlers[subcommand]();
     }
   };
 
   // 'research' delegates to the category handlers defined above
-  const RESEARCH_CATEGORIES = new Set(['smart-money', 'profiler', 'token', 'search', 'perp', 'portfolio', 'points']);
+  const RESEARCH_CATEGORIES = new Set(['smart-money', 'profiler', 'token', 'search', 'perp', 'portfolio', 'points', 'prediction-market']);
 
   cmds['research'] = async (args, apiInstance, flags, options) => {
     const rawCategory = args[0];
@@ -1298,11 +1345,12 @@ export const RESEARCH_CATEGORY_ALIASES = {
   'tgm': 'token',
   'sm': 'smart-money',
   'prof': 'profiler',
-  'port': 'portfolio'
+  'port': 'portfolio',
+  'pm': 'prediction-market'
 };
 
 // Generate help text for a specific subcommand using SCHEMA
-export function generateSubcommandHelp(command, subcommand) {
+export function generateSubcommandHelp(command, subcommand, prefix = null) {
   const cmdSchema = SCHEMA.commands[command] || SCHEMA.commands.research.subcommands[command];
   if (!cmdSchema) return null;
 
@@ -1329,8 +1377,8 @@ export function generateSubcommandHelp(command, subcommand) {
 
   const exampleValues = { address: '0x...', token: '0x...', query: '"term"', symbol: 'BTC', date: '2024-01-01' };
   const chain = subSchema.options?.chain?.default || 'solana';
-  const prefix = DEPRECATED_TO_RESEARCH.has(command) ? `research ${command}` : command;
-  let example = `nansen ${prefix} ${subcommand}`;
+  const cmdPrefix = prefix || (DEPRECATED_TO_RESEARCH.has(command) ? `research ${command}` : command);
+  let example = `nansen ${cmdPrefix} ${subcommand}`;
   if (subSchema.options) {
     for (const [name, opt] of Object.entries(subSchema.options)) {
       if (opt.required) example += ` --${name} ${exampleValues[name] || '<val>'}`;
@@ -1398,7 +1446,7 @@ export async function runCLI(rawArgs, deps = {}) {
         const category = RESEARCH_CATEGORY_ALIASES[subcommand] || subcommand;
         const deepSub = subArgs[1];
         if (deepSub) {
-          const subHelp = generateSubcommandHelp(category, deepSub);
+          const subHelp = generateSubcommandHelp(category, deepSub, `research ${subcommand}`);
           if (subHelp) {
             output(subHelp);
             notify();

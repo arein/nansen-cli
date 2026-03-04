@@ -118,6 +118,48 @@ describe('CLI Smoke Tests', () => {
     expect(stdout).toContain('ohlcv');
   });
 
+  it('should route research prediction-market commands', () => {
+    const { stdout } = runCLI('research pm help');
+    expect(stdout).toContain('ohlcv');
+    expect(stdout).toContain('market-screener');
+    expect(stdout).toContain('categories');
+  });
+
+  it('should error on pm ohlcv without --market-id', () => {
+    const { stdout, stderr, exitCode } = runCLI('research pm ohlcv');
+    expect(exitCode).not.toBe(0);
+    const output = stdout || stderr;
+    const json = JSON.parse(output.split('\n').find(l => l.startsWith('{')));
+    expect(json.code).toBe('MISSING_PARAM');
+  });
+
+  it('should error on pm trades-by-address without --address', () => {
+    const { stdout, stderr, exitCode } = runCLI('research pm trades-by-address');
+    expect(exitCode).not.toBe(0);
+    const output = stdout || stderr;
+    const json = JSON.parse(output.split('\n').find(l => l.startsWith('{')));
+    expect(json.code).toBe('MISSING_PARAM');
+  });
+
+  it('should error on pm trades-by-address with invalid address', () => {
+    const { stdout, stderr, exitCode } = runCLI('research pm trades-by-address --address notanaddress');
+    expect(exitCode).not.toBe(0);
+    const output = stdout || stderr;
+    const json = JSON.parse(output.split('\n').find(l => l.startsWith('{')));
+    expect(json.code).toBe('INVALID_ADDRESS');
+  });
+
+  it('should list available subcommands for unknown pm subcommand', () => {
+    const { stdout, stderr, exitCode } = runCLI('research pm nonexistent');
+    expect(exitCode).not.toBe(0);
+    const output = stdout || stderr;
+    const json = JSON.parse(output.split('\n').find(l => l.startsWith('{')));
+    expect(json.success).toBe(false);
+    expect(json.error).toContain('Unknown subcommand');
+    expect(json.error).toContain('ohlcv');
+    expect(json.code).toBe('UNKNOWN');
+  });
+
   it('should still route deprecated smart-money path', () => {
     const { stdout } = runCLI('smart-money help');
     expect(stdout).toContain('netflow');
