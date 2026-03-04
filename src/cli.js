@@ -439,6 +439,35 @@ async function enrichTransfers(result, apiInstance, chain) {
   return result;
 }
 
+// ============= Address Parsing =============
+
+/**
+ * Parse an --addresses option that may arrive as:
+ *  - a pre-parsed array (arg parser split it)
+ *  - a JSON array string: '["0x…","0x…"]'
+ *  - a comma-separated string: "0x…,0x…"
+ * Non-array JSON values (objects, numbers, booleans) are rejected.
+ */
+export function parseAddressList(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map(a => String(a).trim()).filter(Boolean);
+  }
+  const s = raw || '';
+  try {
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed)) {
+      return parsed.map(a => String(a).trim()).filter(Boolean);
+    }
+    throw new NansenError(
+      '--addresses must be a comma-separated list or JSON array, got: ' + typeof parsed,
+      ErrorCode.INVALID_PARAMS
+    );
+  } catch (e) {
+    if (e instanceof NansenError) throw e;
+    return s.split(',').map(a => a.trim()).filter(Boolean);
+  }
+}
+
 // ============= Composite Functions =============
 
 export async function batchProfile(api, params = {}) {
@@ -945,7 +974,7 @@ export function buildCommands(deps = {}) {
         'batch': () => {
           let addresses = [];
           if (options.addresses) {
-            addresses = options.addresses.split(',').map(a => a.trim()).filter(Boolean);
+            addresses = parseAddressList(options.addresses);
           } else if (options.file) {
             const content = fs.readFileSync(options.file, 'utf8');
             try {
@@ -976,19 +1005,7 @@ export function buildCommands(deps = {}) {
           return traceCounterparties(apiInstance, { address, chain, depth, width, days, delayMs });
         },
         'compare': () => {
-          const rawAddresses = options.addresses;
-          let addrs;
-          if (Array.isArray(rawAddresses)) {
-            addrs = rawAddresses.map(a => String(a).trim()).filter(Boolean);
-          } else {
-            const s = rawAddresses || '';
-            try {
-              const parsed = JSON.parse(s);
-              addrs = Array.isArray(parsed) ? parsed.map(a => String(a).trim()).filter(Boolean) : s.split(',').map(a => a.trim()).filter(Boolean);
-            } catch {
-              addrs = s.split(',').map(a => a.trim()).filter(Boolean);
-            }
-          }
+          const addrs = parseAddressList(options.addresses);
           return compareWallets(apiInstance, { addresses: addrs, chain, days });
         },
         'help': () => ({

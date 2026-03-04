@@ -25,7 +25,8 @@ import {
   batchProfile,
   traceCounterparties,
   compareWallets,
-  buildPagination
+  buildPagination,
+  parseAddressList
 } from '../cli.js';
 import { getCachedResponse, setCachedResponse, clearCache, getCacheDir, NansenError, ErrorCode } from '../api.js';
 import * as fs from 'fs';
@@ -2005,6 +2006,152 @@ describe('profiler compare command', () => {
     const commands = buildCommands({});
     const result = await commands['profiler'](['help'], null, {}, {});
     expect(result.commands).toContain('compare');
+  });
+});
+
+// =================== parseAddressList ===================
+
+describe('parseAddressList', () => {
+  it('should parse a JSON array string', () => {
+    const result = parseAddressList('["0xAAA","0xBBB"]');
+    expect(result).toEqual(['0xAAA', '0xBBB']);
+  });
+
+  it('should handle a pre-parsed array from arg parser', () => {
+    const result = parseAddressList(['0xAAA', '0xBBB']);
+    expect(result).toEqual(['0xAAA', '0xBBB']);
+  });
+
+  it('should parse comma-separated string', () => {
+    const result = parseAddressList('0xAAA,0xBBB,0xCCC');
+    expect(result).toEqual(['0xAAA', '0xBBB', '0xCCC']);
+  });
+
+  it('should trim whitespace and filter empty entries', () => {
+    const result = parseAddressList(' 0xAAA , 0xBBB , ');
+    expect(result).toEqual(['0xAAA', '0xBBB']);
+  });
+
+  it('should handle malformed JSON by falling back to comma split', () => {
+    const result = parseAddressList('[invalid json');
+    expect(result).toEqual(['[invalid json']);
+  });
+
+  it('should throw on non-array JSON values (object)', () => {
+    expect(() => parseAddressList('{"a":"0xAAA"}')).toThrow('--addresses must be a comma-separated list or JSON array');
+  });
+
+  it('should throw on non-array JSON values (string)', () => {
+    expect(() => parseAddressList('"0xAAA"')).toThrow('--addresses must be a comma-separated list or JSON array');
+  });
+
+  it('should throw on non-array JSON values (number)', () => {
+    expect(() => parseAddressList('42')).toThrow('--addresses must be a comma-separated list or JSON array');
+  });
+
+  it('should throw on non-array JSON values (boolean)', () => {
+    expect(() => parseAddressList('true')).toThrow('--addresses must be a comma-separated list or JSON array');
+  });
+
+  it('should return empty array for empty/undefined input', () => {
+    expect(parseAddressList('')).toEqual([]);
+    expect(parseAddressList(undefined)).toEqual([]);
+  });
+
+  it('should coerce non-string array elements to strings', () => {
+    const result = parseAddressList([123, '0xBBB']);
+    expect(result).toEqual(['123', '0xBBB']);
+  });
+});
+
+// =================== profiler batch address parsing ===================
+
+describe('profiler batch address parsing', () => {
+  it('should handle pre-parsed array from arg parser', async () => {
+    const mockApi = {
+      addressLabels: vi.fn().mockResolvedValue({ labels: [] }),
+      addressBalance: vi.fn().mockResolvedValue({ balances: [] }),
+    };
+    const commands = buildCommands({});
+    const result = await commands['profiler'](['batch'], mockApi, {}, {
+      addresses: ['0x0000000000000000000000000000000000000001', '0x0000000000000000000000000000000000000002'],
+      chain: 'ethereum',
+      delay: '0'
+    });
+
+    expect(result.total).toBe(2);
+    expect(mockApi.addressLabels).toHaveBeenCalledTimes(2);
+  });
+
+  it('should handle JSON array string for addresses', async () => {
+    const mockApi = {
+      addressLabels: vi.fn().mockResolvedValue({ labels: [] }),
+      addressBalance: vi.fn().mockResolvedValue({ balances: [] }),
+    };
+    const commands = buildCommands({});
+    const result = await commands['profiler'](['batch'], mockApi, {}, {
+      addresses: '["0x0000000000000000000000000000000000000001","0x0000000000000000000000000000000000000002"]',
+      chain: 'ethereum',
+      delay: '0'
+    });
+
+    expect(result.total).toBe(2);
+  });
+
+  it('should reject non-array JSON for addresses', async () => {
+    const commands = buildCommands({});
+    await expect(
+      commands['profiler'](['batch'], {}, {}, {
+        addresses: '{"addr":"0x0000000000000000000000000000000000000001"}',
+        chain: 'ethereum',
+        delay: '0'
+      })
+    ).rejects.toThrow('--addresses must be a comma-separated list or JSON array');
+  });
+});
+
+// =================== profiler compare address parsing ===================
+
+describe('profiler compare address parsing', () => {
+  it('should handle pre-parsed array from arg parser', async () => {
+    const mockApi = {
+      addressCounterparties: vi.fn().mockResolvedValue({ counterparties: [] }),
+      addressBalance: vi.fn().mockResolvedValue({ balances: [] }),
+    };
+    const commands = buildCommands({});
+    const result = await commands['profiler'](['compare'], mockApi, {}, {
+      addresses: ['0x0000000000000000000000000000000000000001', '0x0000000000000000000000000000000000000002'],
+      chain: 'ethereum',
+      delay: '0'
+    });
+
+    expect(result.addresses).toHaveLength(2);
+  });
+
+  it('should handle JSON array string for addresses', async () => {
+    const mockApi = {
+      addressCounterparties: vi.fn().mockResolvedValue({ counterparties: [] }),
+      addressBalance: vi.fn().mockResolvedValue({ balances: [] }),
+    };
+    const commands = buildCommands({});
+    const result = await commands['profiler'](['compare'], mockApi, {}, {
+      addresses: '["0x0000000000000000000000000000000000000001","0x0000000000000000000000000000000000000002"]',
+      chain: 'ethereum',
+      delay: '0'
+    });
+
+    expect(result.addresses).toHaveLength(2);
+  });
+
+  it('should reject non-array JSON for addresses', async () => {
+    const commands = buildCommands({});
+    await expect(
+      commands['profiler'](['compare'], {}, {}, {
+        addresses: '{"addr":"0x0000000000000000000000000000000000000001"}',
+        chain: 'ethereum',
+        delay: '0'
+      })
+    ).rejects.toThrow('--addresses must be a comma-separated list or JSON array');
   });
 });
 
