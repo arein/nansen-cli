@@ -436,6 +436,7 @@ const CATEGORY_DESCRIPTIONS = {
   perp: "Perpetual futures analytics",
   search: "Search for tokens and entities across Nansen",
   points: "Nansen Points analytics",
+  "prediction-market": "Polymarket prediction market analytics",
 };
 
 /**

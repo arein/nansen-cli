@@ -1371,7 +1371,12 @@
             },
             "type": {
               "type": "string",
-              "default": "any"
+              "default": "any",
+              "enum": [
+                "token",
+                "entity",
+                "any"
+              ]
             },
             "chain": {
               "type": "string"
@@ -1558,9 +1563,6 @@
                 },
                 "limit": {
                   "type": "number"
-                },
-                "date": {
-                  "type": "object"
                 }
               },
               "returns": [
@@ -1772,9 +1774,6 @@
                 },
                 "limit": {
                   "type": "number"
-                },
-                "date": {
-                  "type": "object"
                 }
               },
               "returns": [
@@ -1817,7 +1816,8 @@
                 "top_market_volume_24hr"
               ]
             }
-          }
+          },
+          "description": "Polymarket prediction market analytics"
         },
         "points": {
           "subcommands": {

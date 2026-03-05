@@ -106,30 +106,27 @@
     "profiler/balance": ["entity_name", "hide_spam_token"],
     "profiler/transactions": ["hide_spam_token"],
     "profiler/pnl": ["entity_name"],
-    "profiler/pnl-summary": ["entity_name"],
-    "profiler/historical-balances": ["entity_name"],
-    "profiler/counterparties": ["entity_name", "group_by", "source_input"],
+    "profiler/pnl-summary": ["entity_name", "date"],
+    "profiler/historical-balances": ["entity_name", "date"],
+    "profiler/counterparties": ["entity_name", "group_by", "source_input", "date"],
     "profiler/labels": ["limit", "page"],
+    "profiler/perp-trades": ["date"],
     "token/holders": ["aggregate_by_entity", "label_type"],
     "token/dex-trades": ["only_smart_money", "date"],
-    "token/flows": ["label"],
-    "token/who-bought-sold": ["buy_or_sell"],
+    "token/flows": ["label", "date"],
+    "token/who-bought-sold": ["buy_or_sell", "date"],
     "token/flow-intelligence": ["timeframe", "filters"],
     "token/ohlcv": ["date_range"],
     "token/screener": ["date"],
     "token/transfers": ["date"],
     "token/pnl": ["date"],
-    "profiler/pnl-summary": ["date"],
-    "profiler/counterparties": ["date"],
-    "profiler/historical-balances": ["date"],
-    "profiler/perp-trades": ["date"],
-    "perp/screener": ["date"],
-    "perp/leaderboard": ["date"],
-    "token/flows": ["date"],
-    "token/who-bought-sold": ["date"],
     "token/perp-pnl-leaderboard": ["date"],
     "token/perp-trades": ["date"],
-    "prediction-market/ohlcv": ["date"]
+    "perp/screener": ["date"],
+    "perp/leaderboard": ["date"],
+    "prediction-market/ohlcv": ["date"],
+    "prediction-market/trades-by-market": ["date"],
+    "prediction-market/trades-by-address": ["date"]
   },
   "rename": {
     "_comment": "API param name -> CLI param name mappings",
@@ -289,7 +286,7 @@
     "token/screener": {
       "timeframe": ["5m", "10m", "1h", "6h", "24h", "7d", "30d"]
     },
-    "research/search": {
+    "search": {
       "type": ["token", "entity", "any"]
     }
   },
