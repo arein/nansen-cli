@@ -1044,7 +1044,7 @@
             "perp-pnl-leaderboard": {
               "description": "Perp PnL leaderboard by token",
               "options": {
-                "token_symbol": {
+                "symbol": {
                   "type": "string",
                   "required": true
                 },
@@ -1063,10 +1063,6 @@
                 },
                 "sort": {
                   "type": "string"
-                },
-                "symbol": {
-                  "type": "string",
-                  "required": true
                 },
                 "days": {
                   "type": "number",
@@ -1096,7 +1092,7 @@
             "perp-positions": {
               "description": "Open perp positions by token symbol",
               "options": {
-                "token_symbol": {
+                "symbol": {
                   "type": "string",
                   "required": true
                 },
@@ -1111,10 +1107,6 @@
                 },
                 "sort": {
                   "type": "string"
-                },
-                "symbol": {
-                  "type": "string",
-                  "required": true
                 }
               },
               "returns": [
@@ -1135,7 +1127,7 @@
             "perp-trades": {
               "description": "Perp trades by token symbol",
               "options": {
-                "token_symbol": {
+                "symbol": {
                   "type": "string",
                   "required": true
                 },
@@ -1154,10 +1146,6 @@
                 },
                 "sort": {
                   "type": "string"
-                },
-                "symbol": {
-                  "type": "string",
-                  "required": true
                 },
                 "days": {
                   "type": "number",
@@ -1505,7 +1493,7 @@
             "ohlcv": {
               "description": "Get Prediction Market OHLCV Candles",
               "options": {
-                "market_id": {
+                "market-id": {
                   "type": "string",
                   "required": true
                 },
@@ -1540,7 +1528,7 @@
             "orderbook": {
               "description": "Get Prediction Market Orderbook",
               "options": {
-                "market_id": {
+                "market-id": {
                   "type": "string",
                   "required": true
                 },
@@ -1567,7 +1555,7 @@
             "top-holders": {
               "description": "Get Prediction Market Top Holders",
               "options": {
-                "market_id": {
+                "market-id": {
                   "type": "string",
                   "required": true
                 },
@@ -1596,7 +1584,7 @@
             "trades-by-market": {
               "description": "Get Prediction Market Trades by Market",
               "options": {
-                "market_id": {
+                "market-id": {
                   "type": "string",
                   "required": true
                 },
@@ -1715,7 +1703,7 @@
             "pnl-by-market": {
               "description": "Get Prediction Market PnL by Market",
               "options": {
-                "market_id": {
+                "market-id": {
                   "type": "string",
                   "required": true
                 },
@@ -1774,7 +1762,7 @@
             "position-detail": {
               "description": "Get Prediction Market Position Detail",
               "options": {
-                "market_id": {
+                "market-id": {
                   "type": "string",
                   "required": true
                 },
