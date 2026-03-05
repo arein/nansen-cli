@@ -1500,6 +1500,372 @@
           },
           "description": "Perpetual futures analytics"
         },
+        "prediction-market": {
+          "subcommands": {
+            "ohlcv": {
+              "description": "Get Prediction Market OHLCV Candles",
+              "options": {
+                "market_id": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "object"
+                },
+                "sort": {
+                  "type": "array"
+                }
+              },
+              "returns": [
+                "market_id",
+                "token_id",
+                "side",
+                "outcome_index",
+                "period_start",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume_usd",
+                "trade_count",
+                "unique_traders"
+              ]
+            },
+            "orderbook": {
+              "description": "Get Prediction Market Orderbook",
+              "options": {
+                "market_id": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "market_id",
+                "event_id",
+                "outcome",
+                "outcome_index",
+                "asset_id",
+                "side",
+                "price",
+                "size",
+                "cumulative_size",
+                "snapshot_timestamp"
+              ]
+            },
+            "top-holders": {
+              "description": "Get Prediction Market Top Holders",
+              "options": {
+                "market_id": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "sort": {
+                  "type": "array"
+                }
+              },
+              "returns": [
+                "market_id",
+                "outcome_index",
+                "address",
+                "owner_address",
+                "side",
+                "position_size",
+                "avg_entry_price",
+                "current_price",
+                "unrealized_pnl_usd"
+              ]
+            },
+            "trades-by-market": {
+              "description": "Get Prediction Market Trades by Market",
+              "options": {
+                "market_id": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "object"
+                }
+              },
+              "returns": [
+                "timestamp",
+                "seller",
+                "buyer",
+                "taker_action",
+                "side",
+                "outcome_index",
+                "size",
+                "price",
+                "usdc_value",
+                "tx_hash",
+                "market_id"
+              ]
+            },
+            "market-screener": {
+              "description": "Get Prediction Market Screener",
+              "options": {
+                "sort_by": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string",
+                  "default": ""
+                },
+                "status": {
+                  "type": "string"
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "market_id",
+                "question",
+                "slug",
+                "event_id",
+                "event_title",
+                "active",
+                "closed",
+                "end_date",
+                "neg_risk",
+                "tags",
+                "volume",
+                "volume_24hr",
+                "volume_1wk",
+                "volume_1mo",
+                "liquidity",
+                "volume_change_pct",
+                "open_interest",
+                "best_bid",
+                "best_ask",
+                "last_trade_price",
+                "one_day_price_change",
+                "unique_traders_24h",
+                "created_at",
+                "age_hours"
+              ]
+            },
+            "event-screener": {
+              "description": "Get Prediction Market Event Screener",
+              "options": {
+                "sort_by": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string",
+                  "default": ""
+                },
+                "status": {
+                  "type": "string"
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "event_id",
+                "event_title",
+                "tags",
+                "neg_risk",
+                "market_count",
+                "total_volume",
+                "total_volume_24hr",
+                "total_volume_1wk",
+                "total_volume_1mo",
+                "total_liquidity",
+                "total_open_interest",
+                "total_volume_change_pct",
+                "total_traders_24h",
+                "max_age_hours",
+                "top_market_id",
+                "top_market_question",
+                "top_market_volume_24hr",
+                "markets[market_id, question, volume_24hr, open_interest, best_bid]"
+              ]
+            },
+            "pnl-by-market": {
+              "description": "Get Prediction Market PnL by Market",
+              "options": {
+                "market_id": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "address",
+                "owner_address",
+                "side_held",
+                "net_buy_cost_usd",
+                "net_sell_proceeds_usd",
+                "redemption_value_usd",
+                "unrealized_value_usd",
+                "total_pnl_usd",
+                "question",
+                "event_id",
+                "event_title",
+                "market_resolved",
+                "market_id"
+              ]
+            },
+            "pnl-by-address": {
+              "description": "Get Prediction Market PnL by Address",
+              "options": {
+                "address": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "address",
+                "market_id",
+                "question",
+                "event_id",
+                "event_title",
+                "side_held",
+                "net_buy_cost_usd",
+                "net_sell_proceeds_usd",
+                "redemption_value_usd",
+                "unrealized_value_usd",
+                "total_pnl_usd",
+                "market_resolved"
+              ]
+            },
+            "position-detail": {
+              "description": "Get Prediction Market Position Detail",
+              "options": {
+                "market_id": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "address",
+                "owner_address",
+                "outcome",
+                "outcome_index",
+                "token_id",
+                "balance",
+                "buy_cost_usd",
+                "buy_tokens",
+                "sell_proceeds_usd",
+                "sell_tokens",
+                "avg_entry_price",
+                "current_price",
+                "unrealized_value_usd",
+                "redemption_value_usd",
+                "token_pnl_usd",
+                "event_id",
+                "event_title",
+                "market_resolved",
+                "market_id"
+              ]
+            },
+            "trades-by-address": {
+              "description": "Get Prediction Market Trades by Address",
+              "options": {
+                "address": {
+                  "type": "string",
+                  "required": true
+                },
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "object"
+                }
+              },
+              "returns": [
+                "timestamp",
+                "seller",
+                "buyer",
+                "taker_action",
+                "side",
+                "outcome_index",
+                "size",
+                "price",
+                "usdc_value",
+                "tx_hash",
+                "market_id",
+                "market_question",
+                "event_id",
+                "event_title"
+              ]
+            },
+            "categories": {
+              "description": "Get Prediction Market Categories",
+              "options": {
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "returns": [
+                "category",
+                "active_markets",
+                "total_open_interest",
+                "total_volume",
+                "total_volume_24hr",
+                "total_volume_1wk",
+                "total_traders_24h",
+                "top_market_id",
+                "top_market_question",
+                "top_market_volume_24hr"
+              ]
+            }
+          }
+        },
         "points": {
           "subcommands": {
             "leaderboard": {

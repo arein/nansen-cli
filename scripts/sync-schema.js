@@ -16,8 +16,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA_PATH = path.join(__dirname, "..", "src", "schema.json");
 const OVERRIDES_PATH = path.join(__dirname, "schema-overrides.json");
-const OPENAPI_URL =
-  "https://openapi.gitbook.com/o/IMXUUR5AJxBWa7kPXAHS/spec/nansen-api-combined.json";
+const OPENAPI_URL = "https://api.nansen.ai/openapi.json";
 
 let componentsSchemas = {};
 
