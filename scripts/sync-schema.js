@@ -538,7 +538,7 @@ function buildSchemaFromOpenAPI(openAPISpec, overrides, currentSchema) {
   // Merge with CLI-only commands from current schema
   const cliOnlyPaths = Object.keys(overrides.preserve?.cliOnlyCommands || {});
   for (const cliPath of cliOnlyPaths) {
-    const fullPath = `research.${cliPath.replace("/", ".")}`;
+    const fullPath = `research.${cliPath.replaceAll("/", ".")}`;
     const existing = getNestedValue(currentSchema.commands, fullPath);
     if (existing) {
       setNestedValue(newCommands, fullPath, existing);

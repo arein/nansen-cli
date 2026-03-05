@@ -325,10 +325,6 @@
                   "type": "string",
                   "default": "ethereum"
                 },
-                "date": {
-                  "type": "object",
-                  "required": true
-                },
                 "days": {
                   "type": "number",
                   "default": 30
@@ -392,10 +388,6 @@
                   "type": "string",
                   "default": "ethereum"
                 },
-                "date": {
-                  "type": "object",
-                  "required": true
-                },
                 "filters": {
                   "type": "object"
                 },
@@ -433,10 +425,6 @@
                 "chain": {
                   "type": "string",
                   "default": "ethereum"
-                },
-                "date": {
-                  "type": "object",
-                  "required": true
                 },
                 "filters": {
                   "type": "object"
@@ -605,10 +593,6 @@
               "options": {
                 "address": {
                   "type": "string",
-                  "required": true
-                },
-                "date": {
-                  "type": "object",
                   "required": true
                 },
                 "filters": {
@@ -783,10 +767,6 @@
                   "type": "string",
                   "required": true
                 },
-                "date": {
-                  "type": "object",
-                  "required": true
-                },
                 "page": {
                   "type": "number"
                 },
@@ -823,10 +803,6 @@
                 },
                 "token": {
                   "type": "string",
-                  "required": true
-                },
-                "date": {
-                  "type": "object",
                   "required": true
                 },
                 "page": {
@@ -1048,10 +1024,6 @@
                   "type": "string",
                   "required": true
                 },
-                "date": {
-                  "type": "object",
-                  "required": true
-                },
                 "page": {
                   "type": "number"
                 },
@@ -1129,10 +1101,6 @@
               "options": {
                 "symbol": {
                   "type": "string",
-                  "required": true
-                },
-                "date": {
-                  "type": "object",
                   "required": true
                 },
                 "page": {
@@ -1397,11 +1365,11 @@
         "search": {
           "description": "Search for tokens and entities across Nansen",
           "options": {
-            "search_query": {
+            "query": {
               "type": "string",
               "required": true
             },
-            "result_type": {
+            "type": {
               "type": "string",
               "default": "any"
             },
@@ -1427,10 +1395,6 @@
             "screener": {
               "description": "Screen perpetual futures contracts",
               "options": {
-                "date": {
-                  "type": "object",
-                  "required": true
-                },
                 "page": {
                   "type": "number"
                 },
@@ -1442,6 +1406,10 @@
                 },
                 "sort": {
                   "type": "string"
+                },
+                "days": {
+                  "type": "number",
+                  "default": 30
                 }
               },
               "returns": [
@@ -1460,10 +1428,6 @@
             "leaderboard": {
               "description": "Perpetual futures PnL leaderboard",
               "options": {
-                "date": {
-                  "type": "object",
-                  "required": true
-                },
                 "page": {
                   "type": "number"
                 },
@@ -1475,6 +1439,10 @@
                 },
                 "sort": {
                   "type": "string"
+                },
+                "days": {
+                  "type": "number",
+                  "default": 30
                 }
               },
               "returns": [
@@ -1503,11 +1471,8 @@
                 "limit": {
                   "type": "number"
                 },
-                "date": {
-                  "type": "object"
-                },
                 "sort": {
-                  "type": "array"
+                  "type": "string"
                 }
               },
               "returns": [
@@ -1566,7 +1531,7 @@
                   "type": "number"
                 },
                 "sort": {
-                  "type": "array"
+                  "type": "string"
                 }
               },
               "returns": [
@@ -1615,7 +1580,7 @@
             "market-screener": {
               "description": "Get Prediction Market Screener",
               "options": {
-                "sort_by": {
+                "sort": {
                   "type": "string"
                 },
                 "query": {
@@ -1662,7 +1627,7 @@
             "event-screener": {
               "description": "Get Prediction Market Event Screener",
               "options": {
-                "sort_by": {
+                "sort": {
                   "type": "string"
                 },
                 "query": {

@@ -118,7 +118,18 @@
     "token/ohlcv": ["date_range"],
     "token/screener": ["date"],
     "token/transfers": ["date"],
-    "token/pnl": ["date"]
+    "token/pnl": ["date"],
+    "profiler/pnl-summary": ["date"],
+    "profiler/counterparties": ["date"],
+    "profiler/historical-balances": ["date"],
+    "profiler/perp-trades": ["date"],
+    "perp/screener": ["date"],
+    "perp/leaderboard": ["date"],
+    "token/flows": ["date"],
+    "token/who-bought-sold": ["date"],
+    "token/perp-pnl-leaderboard": ["date"],
+    "token/perp-trades": ["date"],
+    "prediction-market/ohlcv": ["date"]
   },
   "rename": {
     "_comment": "API param name -> CLI param name mappings",
@@ -127,7 +138,10 @@
     "to_date": null,
     "only_new_positions": "only-new-positions",
     "market_id": "market-id",
-    "token_symbol": "symbol"
+    "token_symbol": "symbol",
+    "search_query": "query",
+    "result_type": "type",
+    "sort_by": "sort"
   },
   "preserve": {
     "commands": ["trade", "wallet", "login", "schema"],
@@ -251,6 +265,18 @@
     "profiler/perp-trades": {
       "address": { "type": "string", "required": true },
       "days": { "type": "number", "default": 30 }
+    },
+    "perp/screener": {
+      "days": { "type": "number", "default": 30 }
+    },
+    "perp/leaderboard": {
+      "days": { "type": "number", "default": 30 }
+    },
+    "prediction-market/ohlcv": {
+      "sort": { "type": "string" }
+    },
+    "prediction-market/top-holders": {
+      "sort": { "type": "string" }
     }
   },
   "enums": {
