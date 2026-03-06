@@ -8,30 +8,42 @@ description: "Scan a resolved Polymarket market for wallets exhibiting suspiciou
 **Answers:** "Are there wallets with suspicious trading patterns in this Polymarket market?"
 
 ```bash
-# Find the market ID for a resolved market
+# 1. Find the resolved market
 nansen research prediction-market market-screener --query "<market name>" --status closed --limit 5
 # → market_id, question, volume, last_trade_price
 
-# Run the scanner (stdout: JSON, stderr: progress)
-node scripts/pm-insider-scan.js --market-id <market_id> --limit 20 --days 7
-# → success, data.suspects[].address, score, flags[], details.roiPct, details.invested, details.pnl, details.distinctMarkets, details.walletAge
+# 2. Get top winners (positive PnL) — paginate if needed, keep per_page <= 10
+MID=<market_id>
+nansen research prediction-market pnl-by-market --market-id $MID --limit 10
+# → address (proxy), owner_address (wallet), side_held, net_buy_cost_usd, total_pnl_usd
 
-# Deep-dive on a flagged wallet (use proxyAddress for PM trades, address for on-chain)
-PROXY=<suspect_proxyAddress>
-nansen research prediction-market trades-by-address --address $PROXY --limit 20
-# → timestamp, market_question, taker_action, side, size, price, usdc_value
+# 3. For each top winner, run these three calls (use proxy address for PM, owner for profiler):
+PROXY=<address_from_pnl>
+nansen research prediction-market trades-by-address --address $PROXY --limit 100
+# → market_id, market_question, side, price, size, usdc_value, taker_action, timestamp
 
-nansen research prediction-market pnl-by-address --address $PROXY --limit 10
-# → question, side_held, net_buy_cost_usd, total_pnl_usd, market_resolved
+OWNER=<owner_address_from_pnl>
+nansen research profiler historical-balances --address $OWNER --chain polygon --days 365 --sort block_timestamp:asc --limit 100
+# → block_timestamp, value_usd, token_symbol — first non-zero value_usd = wallet funding date
 
-ADDR=<suspect_address>
-nansen research profiler labels --address $ADDR --chain polygon
+nansen research profiler labels --address $OWNER --chain polygon
 # → label, category
-
-nansen research profiler historical-balances --address $ADDR --chain polygon --days 90
-# → block_timestamp, token_symbol, value_usd
 ```
 
-Scoring flags: NEW_WALLET (3), YOUNG_WALLET (1), SINGLE_MARKET (3), FEW_MARKETS (1), EXTREME_ROI (3), HIGH_ROI (2), LATE_ENTRY (2), LARGE_POSITION (2), KNOWN_ENTITY (-2). Flagged at score >= 3, high risk at >= 7.
+For each winner, compute ROI = total_pnl_usd / net_buy_cost_usd * 100, then score (0–13):
 
-High-confidence suspicious pattern: NEW_WALLET + SINGLE_MARKET + EXTREME_ROI (score 9+). Use `--status closed` on the screener for resolved markets.
+| Flag | Pts | Trigger |
+|---|---|---|
+| NEW_WALLET | 3 | First funded within 7 days of now |
+| YOUNG_WALLET | 1 | First funded within 28 days |
+| SINGLE_MARKET | 3 | trades-by-address shows only 1 distinct market_id |
+| FEW_MARKETS | 1 | 2–3 distinct market_ids |
+| EXTREME_ROI | 3 | ROI >= 500% |
+| HIGH_ROI | 2 | ROI >= 200% |
+| LATE_ENTRY | 2 | Any trade on this market at price >= 0.80 |
+| LARGE_POSITION | 2 | net_buy_cost_usd >= $10k |
+| KNOWN_ENTITY | -2 | Has Nansen labels |
+
+Flagged at score >= 3. High risk at >= 7. High-confidence suspicious pattern: NEW_WALLET + SINGLE_MARKET + EXTREME_ROI (score 9+).
+
+If owner_address is invalid (e.g. "0x"), use the proxy address for profiler calls too. Pause ~1.5s between wallets to avoid rate limits. Skip wallets that error and continue scanning.
