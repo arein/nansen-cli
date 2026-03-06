@@ -10,7 +10,7 @@ description: "Cluster and attribute related wallets — funding chains, shared s
 Chain: `0x` → `--chain ethereum` (also base, arbitrum, optimism, polygon). Base58 → `--chain solana`.
 
 ```bash
-ADDR=<address> CHAIN=ethereum
+ADDR=<address> CHAIN=<ethereum|solana|base|...>  # detect from address format above
 # 1. Identity
 nansen research profiler labels --address $ADDR --chain $CHAIN
 # 2. Related wallets (paginate with --page N)
