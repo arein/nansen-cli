@@ -1,0 +1,19 @@
+name: Sync Skills to ClawHub
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  sync-clawhub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to ClawHub
+        run: npx --yes clawhub@latest login --token "$CLAWHUB_TOKEN" --no-browser
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+
+      - name: Sync skills to ClawHub
+        run: npx clawhub@latest sync --all --workdir . --dir skills
