@@ -571,7 +571,7 @@ export class NansenAPI {
                 const { createPrivyPaymentSignatures } = await import('./privy.js');
                 for await (const { signature, network } of createPrivyPaymentSignatures(response, url)) {
                   const result = await this._x402Retry(signature, `Privy wallet ${defaultWalletName}`, network, url, body, options);
-                  if (result) return result;
+                  if (result !== null) return result;
                 }
               } catch (privyErr) {
                 message = `x402 Privy payment failed: ${privyErr.message}`;
@@ -583,7 +583,7 @@ export class NansenAPI {
                 const { createPaymentSignatures } = await import('./x402.js');
                 for await (const { signature, network } of createPaymentSignatures(response, url)) {
                   const result = await this._x402Retry(signature, `local wallet ${defaultWalletName}`, network, url, body, options);
-                  if (result) return result;
+                  if (result !== null) return result;
                   // This payment option was rejected, try next
                 }
               } catch { /* local wallet unavailable, try WalletConnect */ }
@@ -608,7 +608,7 @@ export class NansenAPI {
                     const { handleX402Payment } = await import('./walletconnect-x402.js');
                     const paymentSignature = await handleX402Payment(paymentRequirements);
                     const result = await this._x402Retry(paymentSignature, 'WalletConnect', null, url, body, options);
-                    if (result) return result;
+                    if (result !== null) return result;
                   } catch (x402Err) {
                     if (!this.apiKey) {
                       message = 'No API key configured. Two ways to authenticate:\n' +
