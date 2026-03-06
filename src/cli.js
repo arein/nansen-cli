@@ -654,8 +654,8 @@ export async function compareWallets(api, params = {}) {
     shared_counterparties: sharedCpAddrs,
     shared_tokens: sharedTokens,
     balances: [
-      { address: addr1, total_usd: tokens1.reduce((sum, t) => sum + (t.balance_usd || 0), 0) },
-      { address: addr2, total_usd: tokens2.reduce((sum, t) => sum + (t.balance_usd || 0), 0) },
+      { address: addr1, total_usd: tokens1.reduce((sum, t) => sum + (t.value_usd ?? t.balance_usd ?? 0), 0) },
+      { address: addr2, total_usd: tokens2.reduce((sum, t) => sum + (t.value_usd ?? t.balance_usd ?? 0), 0) },
     ],
   };
 }

@@ -2334,7 +2334,7 @@ describe('batchProfile', () => {
   it('should call labels and balance for each address', async () => {
     const mockApi = {
       addressLabels: vi.fn().mockResolvedValue({ labels: ['Fund'] }),
-      addressBalance: vi.fn().mockResolvedValue({ balances: [{ token_symbol: 'ETH', balance_usd: 100 }] }),
+      addressBalance: vi.fn().mockResolvedValue({ balances: [{ token_symbol: 'ETH', value_usd: 100 }] }),
     };
 
     const result = await batchProfile(mockApi, {
@@ -2501,8 +2501,8 @@ describe('compareWallets', () => {
         .mockResolvedValueOnce({ counterparties: [{ counterparty_address: '0x0000000000000000000000000000000000000003', volume_usd: 100 }] })
         .mockResolvedValueOnce({ counterparties: [{ counterparty_address: '0x0000000000000000000000000000000000000003', volume_usd: 200 }] }),
       addressBalance: vi.fn()
-        .mockResolvedValueOnce({ balances: [{ token_symbol: 'ETH', balance_usd: 1000 }] })
-        .mockResolvedValueOnce({ balances: [{ token_symbol: 'ETH', balance_usd: 2000 }] }),
+        .mockResolvedValueOnce({ balances: [{ token_symbol: 'ETH', value_usd: 1000 }] })
+        .mockResolvedValueOnce({ balances: [{ token_symbol: 'ETH', value_usd: 2000 }] }),
     };
 
     const result = await compareWallets(mockApi, {
@@ -2515,6 +2515,8 @@ describe('compareWallets', () => {
     expect(result.shared_counterparties).toContain('0x0000000000000000000000000000000000000003');
     expect(result.shared_tokens).toContain('ETH');
     expect(result.balances).toHaveLength(2);
+    expect(result.balances[0].total_usd).toBe(1000);
+    expect(result.balances[1].total_usd).toBe(2000);
   });
 });
 
