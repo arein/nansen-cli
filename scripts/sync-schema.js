@@ -514,15 +514,29 @@ function buildSchemaFromOpenAPI(openAPISpec, overrides, currentSchema) {
       method.description ||
       "";
 
-    // Build command object
+    // Build command object (minimal: description + simplified options only)
+    // Skills document returns, enums, and detailed option info
+    const minimalOptions = {};
+    for (const [name, opt] of Object.entries(options)) {
+      const minOpt = {};
+      if (opt.required) minOpt.required = true;
+      if (opt.default !== undefined) minOpt.default = opt.default;
+      // Only include option if it has required or default
+      if (Object.keys(minOpt).length > 0) {
+        minimalOptions[name] = minOpt;
+      }
+    }
+
     const command = {
       description: cliDescription,
-      options,
     };
 
-    if (returns.length > 0) {
-      command.returns = returns;
+    // Only add options if there are any with required/default
+    if (Object.keys(minimalOptions).length > 0) {
+      command.options = minimalOptions;
     }
+
+    // Note: returns removed - skills document output fields
 
     // Set in new schema
     setNestedValue(newCommands, commandPath, command);
@@ -536,13 +550,29 @@ function buildSchemaFromOpenAPI(openAPISpec, overrides, currentSchema) {
     }
   }
 
-  // Merge with CLI-only commands from current schema
+  // Merge with CLI-only commands from current schema (also minimized)
   const cliOnlyPaths = Object.keys(overrides.preserve?.cliOnlyCommands || {});
   for (const cliPath of cliOnlyPaths) {
     const fullPath = `research.${cliPath.replaceAll("/", ".")}`;
     const existing = getNestedValue(currentSchema.commands, fullPath);
     if (existing) {
-      setNestedValue(newCommands, fullPath, existing);
+      // Minimize CLI-only commands too
+      const minCmd = { description: existing.description || "" };
+      if (existing.options) {
+        const minOpts = {};
+        for (const [name, opt] of Object.entries(existing.options)) {
+          const minOpt = {};
+          if (opt.required) minOpt.required = true;
+          if (opt.default !== undefined) minOpt.default = opt.default;
+          if (Object.keys(minOpt).length > 0) {
+            minOpts[name] = minOpt;
+          }
+        }
+        if (Object.keys(minOpts).length > 0) {
+          minCmd.options = minOpts;
+        }
+      }
+      setNestedValue(newCommands, fullPath, minCmd);
     }
   }
 
