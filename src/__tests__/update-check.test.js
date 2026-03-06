@@ -182,11 +182,17 @@ describe('scheduleUpdateCheck', () => {
 
   it('should not throw when cache is stale', () => {
     writeCache({ latest: '1.3.0', checkedAt: Date.now() - 25 * 60 * 60 * 1000 });
+    // Prevent real network spawn: a detached child process writing to the shared
+    // cache file during a subsequent test creates a race condition that causes
+    // the CLI integration tests to read a stale version and miss the update notification.
+    process.env.NO_UPDATE_NOTIFIER = '1';
     expect(() => scheduleUpdateCheck()).not.toThrow();
   });
 
   it('should not throw when no cache exists', () => {
     removeCache();
+    // Same race condition guard as the stale test above.
+    process.env.NO_UPDATE_NOTIFIER = '1';
     expect(() => scheduleUpdateCheck()).not.toThrow();
   });
 
