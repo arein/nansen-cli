@@ -1,6 +1,19 @@
 ---
 name: nansen-alpha-discovery
 description: "What tokens is smart money accumulating before they pump? Token screener with SM filter cross-referenced against netflow."
+metadata:
+  openclaw:
+    requires:
+      env:
+        - NANSEN_API_KEY
+      bins:
+        - nansen
+    primaryEnv: NANSEN_API_KEY
+    install:
+      - kind: node
+        package: nansen-cli
+        bins: [nansen]
+allowed-tools: Bash(nansen:*)
 ---
 
 # Alpha Discovery
