@@ -485,17 +485,19 @@ export class NansenAPI {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       let response;
       try {
+        const method = options.method || 'POST';
+        const isGet = method === 'GET';
         response = await fetch(url, {
-          method: 'POST',
+          method,
           headers: {
-            'Content-Type': 'application/json',
+            ...(!isGet && { 'Content-Type': 'application/json' }),
             'X-Client-Type': 'nansen-cli',
             'X-Client-Version': packageVersion,
             ...(this.apiKey ? { 'apikey': this.apiKey } : {}),
             ...this.defaultHeaders,
             ...options.headers
           },
-          body: JSON.stringify(NansenAPI.cleanBody(body))
+          ...(!isGet && { body: JSON.stringify(NansenAPI.cleanBody(body)) })
         });
       } catch (err) {
         // Network-level errors - retry these too
@@ -662,6 +664,12 @@ export class NansenAPI {
     
     // Should not reach here, but just in case
     throw lastError;
+  }
+
+  // ============= Account Endpoint =============
+
+  async getAccount() {
+    return this.request('/api/v1/account', {}, { method: 'GET', cache: false });
   }
 
   // ============= Smart Money Endpoints =============

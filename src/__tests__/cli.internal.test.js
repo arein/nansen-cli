@@ -311,6 +311,7 @@ describe('HELP', () => {
     expect(HELP).toContain('trade');
     expect(HELP).toContain('wallet');
     expect(HELP).toContain('schema');
+    expect(HELP).toContain('account');
     expect(HELP).toContain('login');
     expect(HELP).toContain('logout');
   });
@@ -394,6 +395,17 @@ describe('buildCommands', () => {
       expect(logs.some(l => l.includes('API_KEY_REQUIRED'))).toBe(true);
     });
 
+  });
+
+  describe('account command', () => {
+    it('should return account data from apiInstance.getAccount()', async () => {
+      const mockApi = {
+        getAccount: vi.fn().mockResolvedValue({ plan: 'pro', credits_remaining: 9800 }),
+      };
+      const result = await commands.account([], mockApi, {}, {});
+      expect(mockApi.getAccount).toHaveBeenCalledOnce();
+      expect(result).toEqual({ plan: 'pro', credits_remaining: 9800 });
+    });
   });
 
   describe('smart-money command', () => {
