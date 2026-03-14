@@ -354,8 +354,7 @@ export function buildAlertData(options, { applyDefaults = true } = {}) {
  */
 function isRangeSet(range) {
   if (!range || typeof range !== 'object') return false;
-  return (range.min !== undefined && range.min !== null) ||
-         (range.max !== undefined && range.max !== null);
+  return range.min != null || range.max != null;
 }
 
 /**
@@ -563,7 +562,7 @@ USAGE:
             const addr = options['token-address'].toLowerCase();
             alerts = alerts.filter(a => {
               const allTokens = [...(a.data?.inclusion?.tokens ?? []), ...(a.data?.exclusion?.tokens ?? [])];
-              return allTokens.some(t => t.address?.toLowerCase().includes(addr));
+              return allTokens.some(t => t.address?.toLowerCase() === addr);
             });
           }
           if (options.chain) {
